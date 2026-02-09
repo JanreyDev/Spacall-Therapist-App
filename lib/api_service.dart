@@ -9,7 +9,7 @@ class ApiService {
   // Use 10.0.2.2 for Android emulator, localhost for web/desktop
   static String get baseUrl {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:8000/api';
+      return 'http://192.168.100.6:8000/api';
     }
     return 'http://localhost:8000/api';
   }
@@ -19,14 +19,12 @@ class ApiService {
   void initEcho(String token, int providerId) {
     if (_echo != null) return;
 
-    final String host = kIsWeb
-        ? 'localhost'
-        : (defaultTargetPlatform == TargetPlatform.android
-              ? '10.0.2.2'
-              : 'localhost');
-
     PusherOptions options = PusherOptions(
-      host: host,
+      host: kIsWeb
+          ? 'localhost'
+          : (defaultTargetPlatform == TargetPlatform.android
+                ? '192.168.100.6'
+                : 'localhost'),
       encrypted: false,
       cluster: 'mt1',
       auth: PusherAuth(

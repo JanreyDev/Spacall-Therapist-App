@@ -214,4 +214,26 @@ class ApiService {
       throw Exception('Status Update Error: $e');
     }
   }
+
+  Future<Map<String, dynamic>> loginPin(String mobileNumber, String pin) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/login-pin'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'mobile_number': mobileNumber, 'pin': pin}),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['message'] ?? 'Login failed');
+      }
+    } catch (e) {
+      throw Exception('Login Error: $e');
+    }
+  }
 }

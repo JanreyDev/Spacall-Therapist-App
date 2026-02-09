@@ -1,10 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'nearby_bookings_screen.dart';
+import 'login_screen.dart';
 
 class WelcomeScreen extends StatelessWidget {
   final Map<String, dynamic> userData;
 
   const WelcomeScreen({super.key, required this.userData});
+
+  Future<void> _handleLogout(BuildContext context) async {
+    // Just navigate back to LoginScreen.
+    // We KEEP the last_mobile_number in prefs so it remains "linked" for PIN login.
+    // If they want to switch, they can use the "Switch Account" button on the LoginScreen.
+    if (!context.mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,8 +34,7 @@ class WelcomeScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () =>
-                Navigator.of(context).popUntil((route) => route.isFirst),
+            onPressed: () => _handleLogout(context),
           ),
         ],
       ),

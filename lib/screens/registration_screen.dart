@@ -1,7 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../api_service.dart';
 import 'welcome_screen.dart';
 
@@ -76,6 +77,11 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         idSelfiePhoto: _idSelfiePhoto,
         role: 'therapist', // Default role for this app
       );
+
+      if (!mounted) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_mobile_number', widget.mobileNumber);
 
       if (!mounted) return;
 

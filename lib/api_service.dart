@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:laravel_echo/laravel_echo.dart';
+import 'package:pusher_client/pusher_client.dart';
 
 class ApiService {
   // Use 10.0.2.2 for Android emulator, localhost for web/desktop
@@ -10,6 +12,56 @@ class ApiService {
       return 'http://10.0.2.2:8000/api';
     }
     return 'http://localhost:8000/api';
+  }
+
+  Echo? _echo;
+
+  void initEcho(String token, int providerId) {
+    if (_echo != null) return;
+
+    final String host = kIsWeb
+        ? 'localhost'
+        : (defaultTargetPlatform == TargetPlatform.android
+              ? '10.0.2.2'
+              : 'localhost');
+
+    PusherOptions options = PusherOptions(
+      host: host,
+      encrypted: false,
+      cluster: 'mt1',
+      auth: PusherAuth(
+        '${baseUrl.replaceAll('/api', '')}/broadcasting/auth',
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      ),
+    );
+
+    PusherClient pusher = PusherClient(
+      'spacallkey',
+      options,
+      autoConnect: true,
+      enableLogging: true,
+    );
+
+    _echo = Echo(client: pusher, broadcaster: EchoBroadcasterType.Pusher);
+
+    print('Echo initialized for therapist.$providerId');
+  }
+
+  void listenForBookings(int providerId, Function(dynamic) onBookingReceived) {
+    if (_echo == null) return;
+
+    _echo!.private('therapist.$providerId').listen('BookingRequested', (e) {
+      print('Real-time booking received: $e');
+      onBookingReceived(e['booking']);
+    });
+  }
+
+  void disconnectEcho() {
+    _echo?.disconnect();
+    _echo = null;
   }
 
   Future<Map<String, dynamic>> loginEntry(String mobileNumber) async {
@@ -186,6 +238,30 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Fetch Bookings Error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> getActiveRequests({
+    required String token,
+  }) async {
+    try {
+      final url = '$baseUrl/therapist/active-requests';
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to fetch active requests: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Fetch Requests Error: $e');
     }
   }
 

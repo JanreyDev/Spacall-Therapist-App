@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../api_service.dart';
 import 'nearby_bookings_screen.dart';
+import 'active_requests_screen.dart';
 import 'login_screen.dart';
+import 'dart:async';
 
 class WelcomeScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -16,12 +18,46 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   final ApiService _apiService = ApiService();
   bool _isOnline = false;
   bool _isUpdating = false;
+  int _requestCount = 0;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
-    // In a real app, we'd fetch the current status from the backend.
-    // For now, let's default to false.
+    _startPolling();
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startPolling() {
+    // Check immediately
+    _checkActiveRequests();
+    // Then every 10 seconds
+    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (_isOnline) {
+        _checkActiveRequests();
+      }
+    });
+  }
+
+  Future<void> _checkActiveRequests() async {
+    try {
+      final response = await _apiService.getActiveRequests(
+        token: widget.userData['token'],
+      );
+      final List<dynamic> requests = response['bookings'] ?? [];
+      if (mounted) {
+        setState(() {
+          _requestCount = requests.length;
+        });
+      }
+    } catch (e) {
+      print('Polling error: $e');
+    }
   }
 
   Future<void> _toggleOnline(bool value) async {
@@ -41,6 +77,35 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         _isOnline = value;
         _isUpdating = false;
       });
+
+      if (value) {
+        final providerId = widget.userData['provider']['id'];
+        _apiService.initEcho(widget.userData['token'], providerId);
+        _apiService.listenForBookings(providerId, (booking) {
+          _checkActiveRequests(); // Refresh count instantly
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'New Booking Request from ${booking['customer']['first_name']}!',
+              ),
+              action: SnackBarAction(
+                label: 'View',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          ActiveRequestsScreen(token: widget.userData['token']),
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        });
+      } else {
+        _apiService.disconnectEcho();
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -72,6 +137,47 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       appBar: AppBar(
         title: const Text('Therapist Dashboard'),
         actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_none),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ActiveRequestsScreen(token: token),
+                    ),
+                  ).then((_) => _checkActiveRequests()); // Refresh on return
+                },
+              ),
+              if (_requestCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      '$_requestCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => _handleLogout(context),

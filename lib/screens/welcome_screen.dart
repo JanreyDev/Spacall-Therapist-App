@@ -5,6 +5,7 @@ import 'active_requests_screen.dart';
 import 'login_screen.dart';
 import 'dart:async';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart';
 
 class WelcomeScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -19,6 +20,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   final ApiService _apiService = ApiService();
   bool _isOnline = false;
   bool _isUpdating = false;
+  String _currentAddress = 'Not set';
   int _requestCount = 0;
   Timer? _pollingTimer;
 
@@ -35,14 +37,28 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   void _startPolling() {
-    // Check immediately
     _checkActiveRequests();
-    // Then every 10 seconds
-    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (_isOnline) {
         _checkActiveRequests();
+        _updateLiveLocation();
       }
     });
+  }
+
+  Future<void> _updateLiveLocation() async {
+    try {
+      final position = await _determinePosition();
+      await _apiService.updateLocation(
+        token: widget.userData['token'],
+        latitude: position.latitude,
+        longitude: position.longitude,
+        isOnline: true,
+      );
+      await _getAddressFromLatLng(position);
+    } catch (e) {
+      print('Periodic location update error: $e');
+    }
   }
 
   Future<void> _checkActiveRequests() async {
@@ -89,6 +105,32 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
+  Future<void> _getAddressFromLatLng(Position position) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        if (mounted) {
+          setState(() {
+            _currentAddress =
+                "${place.street}, ${place.locality}, ${place.administrativeArea}";
+          });
+        }
+      }
+    } catch (e) {
+      print("Geocoding error: $e");
+      if (mounted) {
+        setState(() {
+          _currentAddress = "Address unavailable";
+        });
+      }
+    }
+  }
+
   Future<void> _toggleOnline(bool value) async {
     setState(() {
       _isUpdating = true;
@@ -103,10 +145,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           final position = await _determinePosition();
           latitude = position.latitude;
           longitude = position.longitude;
+          await _getAddressFromLatLng(position);
         } catch (e) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Location error: $e. Using default.')),
+          _showLuxuryDialog(
+            'Location error: $e. Using default.',
+            isError: true,
           );
         }
       }
@@ -133,26 +177,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         final providerId = provider['id'];
         await _apiService.initEcho(widget.userData['token'], providerId);
         _apiService.listenForBookings(providerId, (booking) {
-          _checkActiveRequests(); // Refresh count instantly
+          _checkActiveRequests();
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'New Booking Request from ${booking['customer']['first_name']}!',
-              ),
-              action: SnackBarAction(
-                label: 'View',
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          ActiveRequestsScreen(token: widget.userData['token']),
-                    ),
-                  );
-                },
-              ),
-            ),
+          _showLuxuryDialog(
+            'New Booking Request from ${booking['customer']['first_name']}!',
+            actionLabel: 'View',
+            onActionPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      ActiveRequestsScreen(token: widget.userData['token']),
+                ),
+              );
+            },
           );
         });
       } else {
@@ -160,9 +198,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update status: $e')));
+      _showLuxuryDialog('Failed to update status: $e', isError: true);
       setState(() {
         _isUpdating = false;
       });
@@ -200,7 +236,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     MaterialPageRoute(
                       builder: (context) => ActiveRequestsScreen(token: token),
                     ),
-                  ).then((_) => _checkActiveRequests()); // Refresh on return
+                  ).then((_) => _checkActiveRequests());
                 },
               ),
               if (_requestCount > 0)
@@ -312,6 +348,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
                       children: [
+                        ListTile(
+                          leading: const Icon(
+                            Icons.location_on,
+                            color: Colors.red,
+                          ),
+                          title: const Text('Current Location'),
+                          subtitle: Text(_currentAddress),
+                        ),
+                        const Divider(),
                         const ListTile(
                           leading: Icon(Icons.info_outline),
                           title: Text('Account Status'),
@@ -351,6 +396,155 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
               ),
               const SizedBox(height: 48),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showLuxuryDialog(
+    String message, {
+    bool isError = false,
+    String? actionLabel,
+    VoidCallback? onActionPressed,
+  }) {
+    const goldColor = Color(0xFFD4AF37);
+    showDialog(
+      context: context,
+      barrierDismissible: !isError,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: (isError ? Colors.redAccent : goldColor).withOpacity(0.5),
+            width: 1,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isError ? Icons.error_outline : Icons.check_circle_outline,
+                color: isError ? Colors.redAccent : goldColor,
+                size: 48,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                isError ? 'ERROR' : 'SUCCESS',
+                style: const TextStyle(
+                  color: goldColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 16),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  if (actionLabel != null && onActionPressed != null) ...[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: Colors.white.withOpacity(0.3),
+                          ),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('DISMISS'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFFB8860B),
+                              goldColor,
+                              Color(0xFFFFD700),
+                            ],
+                          ),
+                        ),
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            onActionPressed();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            actionLabel.toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ] else
+                    Expanded(
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          gradient: LinearGradient(
+                            colors: isError
+                                ? [
+                                    Colors.redAccent.withOpacity(0.8),
+                                    Colors.redAccent,
+                                  ]
+                                : [
+                                    const Color(0xFFB8860B),
+                                    goldColor,
+                                    const Color(0xFFFFD700),
+                                  ],
+                          ),
+                        ),
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            'CONTINUE',
+                            style: TextStyle(
+                              color: isError ? Colors.white : Colors.black,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),

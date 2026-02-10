@@ -113,16 +113,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     if (_firstNameController.text.isEmpty ||
         _lastNameController.text.isEmpty ||
         _pinController.text.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all fields correctly')),
-      );
+      _showLuxuryDialog('Please fill all fields correctly', isError: true);
       return;
     }
 
     if (_pinController.text != _confirmPinController.text) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('PINs do not match')));
+      _showLuxuryDialog('PINs do not match', isError: true);
       return;
     }
 
@@ -144,6 +140,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       );
 
       if (!mounted) return;
+      _showLuxuryDialog('Registration Successful!');
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('last_mobile_number', widget.mobileNumber);
@@ -158,9 +155,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.toString())));
+      _showLuxuryDialog(
+        e.toString().replaceAll('Exception: ', ''),
+        isError: true,
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -292,6 +290,93 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     child: const Text('Complete Registration'),
                   ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showLuxuryDialog(String message, {bool isError = false}) {
+    const goldColor = Color(0xFFD4AF37);
+    showDialog(
+      context: context,
+      barrierDismissible: !isError,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(
+            color: (isError ? Colors.redAccent : goldColor).withOpacity(0.5),
+            width: 1,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isError ? Icons.error_outline : Icons.check_circle_outline,
+                color: isError ? Colors.redAccent : goldColor,
+                size: 48,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                isError ? 'ERROR' : 'SUCCESS',
+                style: const TextStyle(
+                  color: goldColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 16),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    gradient: LinearGradient(
+                      colors: isError
+                          ? [
+                              Colors.redAccent.withOpacity(0.8),
+                              Colors.redAccent,
+                            ]
+                          : [
+                              const Color(0xFFB8860B),
+                              goldColor,
+                              const Color(0xFFFFD700),
+                            ],
+                    ),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      'CONTINUE',
+                      style: TextStyle(
+                        color: isError ? Colors.white : Colors.black,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

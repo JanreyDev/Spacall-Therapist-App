@@ -23,9 +23,12 @@ class EchoPusherClient {
 }
 
 class ApiService {
-  // Use 10.0.2.2 for Android emulator, localhost for web/desktop
   static String get baseUrl {
-    return 'https://api.spacall.ph/api';
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      // Physical phone connection via local IP
+      return 'http://192.168.100.6:8000/api';
+    }
+    return 'http://localhost:8000/api';
   }
 
   Echo? _echo;

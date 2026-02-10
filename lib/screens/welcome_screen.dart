@@ -167,7 +167,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       });
 
       if (value) {
-        final provider = widget.userData['provider'];
+        // Defensive: Check top level, then nested in user
+        var provider = widget.userData['provider'];
+        if (provider == null && widget.userData['user'] != null) {
+          provider = widget.userData['user']['provider'];
+        }
+
         if (provider == null || provider['id'] == null) {
           throw Exception(
             'Therapist profile not found. Please log out and back in.',

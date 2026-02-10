@@ -4,6 +4,7 @@ import 'nearby_bookings_screen.dart';
 import 'active_requests_screen.dart';
 import 'login_screen.dart';
 import 'dart:async';
+import 'package:geolocator/geolocator.dart';
 
 class WelcomeScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -60,17 +61,60 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
   }
 
+  Future<Position> _determinePosition() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return Future.error('Location services are disabled.');
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        return Future.error('Location permissions are denied');
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      return Future.error(
+        'Location permissions are permanently denied, we cannot request permissions.',
+      );
+    }
+
+    return await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+  }
+
   Future<void> _toggleOnline(bool value) async {
     setState(() {
       _isUpdating = true;
     });
 
     try {
-      // For development, we use hardcoded Manila coordinates
+      double latitude = 14.5995;
+      double longitude = 120.9842;
+
+      if (value) {
+        try {
+          final position = await _determinePosition();
+          latitude = position.latitude;
+          longitude = position.longitude;
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Location error: $e. Using default.')),
+          );
+        }
+      }
+
       await _apiService.updateLocation(
         token: widget.userData['token'],
-        latitude: 14.5995,
-        longitude: 120.9842,
+        latitude: latitude,
+        longitude: longitude,
         isOnline: value,
       );
       setState(() {
@@ -79,10 +123,18 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       });
 
       if (value) {
-        final providerId = widget.userData['provider']['id'];
+        final provider = widget.userData['provider'];
+        if (provider == null || provider['id'] == null) {
+          throw Exception(
+            'Therapist profile not found. Please log out and back in.',
+          );
+        }
+
+        final providerId = provider['id'];
         await _apiService.initEcho(widget.userData['token'], providerId);
         _apiService.listenForBookings(providerId, (booking) {
           _checkActiveRequests(); // Refresh count instantly
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(

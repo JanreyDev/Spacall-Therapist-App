@@ -84,7 +84,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       preferredCameraDevice: type == 'profile'
           ? CameraDevice.front
           : CameraDevice.rear,
-      imageQuality: 80,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 50,
     );
     if (image != null) {
       setState(() {

@@ -66,7 +66,7 @@ class _SpacallCameraScreenState extends State<SpacallCameraScreen> {
 
     _controller = CameraController(
       camera,
-      ResolutionPreset.high,
+      ResolutionPreset.medium,
       enableAudio: false,
       imageFormatGroup: Platform.isAndroid
           ? ImageFormatGroup.nv21

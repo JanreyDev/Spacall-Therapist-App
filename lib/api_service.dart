@@ -5,6 +5,23 @@ import 'package:image_picker/image_picker.dart';
 import 'package:laravel_echo/laravel_echo.dart';
 import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
 
+class EchoPusherClient {
+  final PusherChannelsFlutter pusher;
+  EchoPusherClient(this.pusher);
+
+  void disconnect() => pusher.disconnect();
+
+  Future<void> connect() => pusher.connect();
+
+  Future<dynamic> subscribe(String channelName) {
+    return pusher.subscribe(channelName: channelName);
+  }
+
+  Future<void> unsubscribe(String channelName) {
+    return pusher.unsubscribe(channelName: channelName);
+  }
+}
+
 class ApiService {
   // Use 10.0.2.2 for Android emulator, localhost for web/desktop
   static String get baseUrl {
@@ -41,7 +58,10 @@ class ApiService {
 
     await pusher.connect();
 
-    _echo = Echo(client: pusher, broadcaster: EchoBroadcasterType.Pusher);
+    _echo = Echo(
+      client: EchoPusherClient(pusher),
+      broadcaster: EchoBroadcasterType.Pusher,
+    );
 
     print('Echo initialized for therapist.$providerId');
   }

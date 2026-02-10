@@ -3,45 +3,43 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:laravel_echo/laravel_echo.dart';
-import 'package:pusher_client/pusher_client.dart';
+import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
 
 class ApiService {
   // Use 10.0.2.2 for Android emulator, localhost for web/desktop
   static String get baseUrl {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://192.168.100.6:8000/api';
-    }
-    return 'http://localhost:8000/api';
+    return 'https://api.spacall.ph/api';
   }
 
   Echo? _echo;
 
-  void initEcho(String token, int providerId) {
+  Future<void> initEcho(String token, int providerId) async {
     if (_echo != null) return;
 
-    PusherOptions options = PusherOptions(
-      host: kIsWeb
-          ? 'localhost'
-          : (defaultTargetPlatform == TargetPlatform.android
-                ? '192.168.100.6'
-                : 'localhost'),
-      encrypted: false,
+    final pusher = PusherChannelsFlutter.getInstance();
+
+    await pusher.init(
+      apiKey: 'spacallkey',
       cluster: 'mt1',
-      auth: PusherAuth(
-        '${baseUrl.replaceAll('/api', '')}/broadcasting/auth',
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      ),
+      onAuthorizer: (channelName, socketId, options) async {
+        final authUrl = '${baseUrl.replaceAll('/api', '')}/broadcasting/auth';
+        final response = await http.post(
+          Uri.parse(authUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode({
+            'socket_id': socketId,
+            'channel_name': channelName,
+          }),
+        );
+        return jsonDecode(response.body);
+      },
     );
 
-    PusherClient pusher = PusherClient(
-      'spacallkey',
-      options,
-      autoConnect: true,
-      enableLogging: true,
-    );
+    await pusher.connect();
 
     _echo = Echo(client: pusher, broadcaster: EchoBroadcasterType.Pusher);
 
@@ -117,6 +115,7 @@ class ApiService {
     required String pin,
     required dynamic profilePhoto,
     required dynamic idCardPhoto,
+    required dynamic idCardBackPhoto,
     required dynamic idSelfiePhoto,
     String role = 'therapist',
   }) async {
@@ -156,6 +155,7 @@ class ApiService {
 
       await addFile('profile_photo', profilePhoto);
       await addFile('id_card_photo', idCardPhoto);
+      await addFile('id_card_back_photo', idCardBackPhoto);
       await addFile('id_selfie_photo', idSelfiePhoto);
 
       final streamedResponse = await request.send();

@@ -80,7 +80,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
       if (value) {
         final providerId = widget.userData['provider']['id'];
-        _apiService.initEcho(widget.userData['token'], providerId);
+        await _apiService.initEcho(widget.userData['token'], providerId);
         _apiService.listenForBookings(providerId, (booking) {
           _checkActiveRequests(); // Refresh count instantly
           ScaffoldMessenger.of(context).showSnackBar(

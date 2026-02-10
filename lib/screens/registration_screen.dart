@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../api_service.dart';
 import 'welcome_screen.dart';
+import 'spacall_camera_screen.dart';
+import '../api_service.dart';
 
 class RegistrationScreen extends StatefulWidget {
   final String mobileNumber;
@@ -19,6 +20,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _pinController = TextEditingController();
+  final _confirmPinController = TextEditingController();
   final _apiService = ApiService();
 
   String _gender = 'male';
@@ -27,16 +29,68 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
   XFile? _profilePhoto;
   XFile? _idCardPhoto;
+  XFile? _idCardBackPhoto;
   XFile? _idSelfiePhoto;
 
   final ImagePicker _picker = ImagePicker();
 
-  Future<void> _pickImage(String type) async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+  Future<void> _showSourceSelection(String type) async {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Gallery'),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(type, source: ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Camera'),
+              onTap: () async {
+                Navigator.pop(context);
+                final XFile? result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SpacallCameraScreen(
+                      isFace: type == 'profile',
+                      isBlinkRequired:
+                          false, // No blink required for simple profile/id photos
+                    ),
+                  ),
+                );
+                if (result != null) {
+                  setState(() {
+                    if (type == 'profile') _profilePhoto = result;
+                    if (type == 'id_card') _idCardPhoto = result;
+                    if (type == 'id_card_back') _idCardBackPhoto = result;
+                  });
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImage(String type, {required ImageSource source}) async {
+    final XFile? image = await _picker.pickImage(
+      source: source,
+      preferredCameraDevice: type == 'profile'
+          ? CameraDevice.front
+          : CameraDevice.rear,
+      imageQuality: 80,
+    );
     if (image != null) {
       setState(() {
         if (type == 'profile') _profilePhoto = image;
         if (type == 'id_card') _idCardPhoto = image;
+        if (type == 'id_card_back') _idCardBackPhoto = image;
         if (type == 'id_selfie') _idSelfiePhoto = image;
       });
     }
@@ -47,6 +101,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       _firstNameController.text = 'John';
       _lastNameController.text = 'Doe';
       _pinController.text = '123456';
+      _confirmPinController.text = '123456';
       _gender = 'male';
       _dob = DateTime(1990, 1, 1);
     });
@@ -62,6 +117,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       return;
     }
 
+    if (_pinController.text != _confirmPinController.text) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('PINs do not match')));
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -74,6 +136,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         pin: _pinController.text.trim(),
         profilePhoto: _profilePhoto,
         idCardPhoto: _idCardPhoto,
+        idCardBackPhoto: _idCardBackPhoto,
         idSelfiePhoto: _idSelfiePhoto,
         role: 'therapist', // Default role for this app
       );
@@ -160,6 +223,16 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               controller: _pinController,
               decoration: const InputDecoration(labelText: '6-Digit PIN'),
               keyboardType: TextInputType.number,
+              obscureText: true,
+              maxLength: 6,
+            ),
+            TextField(
+              controller: _confirmPinController,
+              decoration: const InputDecoration(
+                labelText: 'Confirm 6-Digit PIN',
+              ),
+              keyboardType: TextInputType.number,
+              obscureText: true,
               maxLength: 6,
             ),
             const SizedBox(height: 16),
@@ -171,17 +244,40 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             _buildImagePicker(
               'Profile Photo',
               _profilePhoto,
-              () => _pickImage('profile'),
+              () => _showSourceSelection('profile'),
+              icon: Icons.person_add_outlined,
             ),
             _buildImagePicker(
-              'ID Card',
+              'ID Card (Front)',
               _idCardPhoto,
-              () => _pickImage('id_card'),
+              () => _showSourceSelection('id_card'),
+              icon: Icons.badge_outlined,
             ),
             _buildImagePicker(
-              'ID Selfie',
+              'ID Card (Back)',
+              _idCardBackPhoto,
+              () => _showSourceSelection('id_card_back'),
+              icon: Icons.badge_outlined,
+            ),
+            _buildImagePicker(
+              'Facial Scan (ID Selfie)',
               _idSelfiePhoto,
-              () => _pickImage('id_selfie'),
+              () async {
+                final XFile? result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SpacallCameraScreen(
+                      isFace: true,
+                      isBlinkRequired: true, // Verification scan requires blink
+                    ),
+                  ),
+                );
+                if (result != null) {
+                  setState(() => _idSelfiePhoto = result);
+                }
+              },
+              icon: Icons.face_retouching_natural,
+              isScanner: true,
             ),
             const SizedBox(height: 32),
             _isLoading
@@ -199,23 +295,84 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     );
   }
 
-  Widget _buildImagePicker(String label, XFile? image, VoidCallback onTap) {
+  Widget _buildImagePicker(
+    String label,
+    XFile? image,
+    VoidCallback onTap, {
+    IconData? icon,
+    bool isScanner = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: InkWell(
         onTap: onTap,
         child: Container(
-          height: 100,
+          height: 120,
           width: double.infinity,
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey),
-            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isScanner && image == null ? Colors.blue : Colors.grey,
+              width: isScanner && image == null ? 2 : 1,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            color: isScanner && image == null
+                ? Colors.blue.withOpacity(0.05)
+                : null,
           ),
           child: image == null
-              ? Center(child: Text(label))
-              : kIsWeb
-              ? Image.network(image.path, fit: BoxFit.cover)
-              : Image.file(File(image.path), fit: BoxFit.cover),
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      icon ?? Icons.add_a_photo_outlined,
+                      color: isScanner ? Colors.blue : Colors.grey[600],
+                      size: 32,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: isScanner ? Colors.blue : Colors.grey[600],
+                        fontWeight: isScanner
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                    ),
+                    if (isScanner)
+                      const Text(
+                        '(Tap to start facial scan)',
+                        style: TextStyle(fontSize: 10, color: Colors.blue),
+                      ),
+                  ],
+                )
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(11),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: kIsWeb
+                            ? Image.network(image.path, fit: BoxFit.cover)
+                            : Image.file(File(image.path), fit: BoxFit.cover),
+                      ),
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
         ),
       ),
     );

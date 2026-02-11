@@ -51,7 +51,7 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
       if (!mounted) return;
 
       if (status == 'accepted') {
-        Navigator.push(
+        Navigator.pushReplacement(
           context,
           MaterialPageRoute(
             builder: (context) => JobProgressScreen(

@@ -57,7 +57,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         token: widget.userData['token'],
         latitude: position.latitude,
         longitude: position.longitude,
-        isOnline: true,
+        isOnline: _isOnline,
       );
       await _getAddressFromLatLng(position);
     } catch (e) {
@@ -135,6 +135,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
     return await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
+      timeLimit: const Duration(seconds: 15),
     );
   }
 
@@ -410,9 +411,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                         horizontal: 20,
                         vertical: 10,
                       ),
-                      leading: const CircleAvatar(
+                      leading: CircleAvatar(
                         backgroundColor: Colors.white24,
-                        child: Icon(Icons.play_arrow, color: Colors.white),
+                        child: Icon(
+                          _ongoingBooking!['status'] == 'in_progress'
+                              ? Icons.timer
+                              : _ongoingBooking!['status'] == 'arrived'
+                              ? Icons.home
+                              : Icons.play_arrow,
+                          color: Colors.white,
+                        ),
                       ),
                       title: const Text(
                         'ONGOING JOB',
@@ -422,10 +430,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           fontSize: 12,
                         ),
                       ),
-                      subtitle: Text(
-                        '${_ongoingBooking!['service']['name']} - ${_ongoingBooking!['status'].toUpperCase()}',
-                        style: const TextStyle(color: Colors.white70),
-                      ),
+                      subtitle: Text(() {
+                        final status = _ongoingBooking!['status'];
+                        final service = _ongoingBooking!['service']['name'];
+                        if (status == 'en_route')
+                          return '$service - Driving to client';
+                        if (status == 'arrived')
+                          return '$service - At client location';
+                        if (status == 'in_progress')
+                          return '$service - Service in progress';
+                        return '$service - ${status.toUpperCase()}';
+                      }(), style: const TextStyle(color: Colors.white70)),
                       trailing: const Icon(
                         Icons.arrow_forward_ios,
                         color: Colors.white,

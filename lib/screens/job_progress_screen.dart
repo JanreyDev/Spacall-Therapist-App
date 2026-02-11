@@ -38,6 +38,23 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
       double.parse(loc['longitude'].toString()),
     );
     _startTracking();
+    _fetchLatestStatus();
+  }
+
+  Future<void> _fetchLatestStatus() async {
+    try {
+      final data = await _apiService.getBookingStatus(
+        widget.booking['id'],
+        widget.token,
+      );
+      if (mounted) {
+        setState(() {
+          _currentStatus = data['booking_status'];
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching latest status: $e');
+    }
   }
 
   @override
@@ -98,7 +115,10 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         _currentStatus = status;
         _isLoading = false;
       });
-      if (status == 'completed' || status == 'cancelled') {
+      if (status == 'completed' ||
+          status == 'cancelled' ||
+          status == 'arrived' ||
+          status == 'in_progress') {
         if (mounted) Navigator.pop(context);
       }
     } catch (e) {

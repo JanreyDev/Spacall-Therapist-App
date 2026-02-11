@@ -28,6 +28,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Map<String, dynamic>? _ongoingBooking;
   Timer? _pollingTimer;
   int _selectedIndex = 0;
+  int? _lastNearbyBookingId;
 
   @override
   void initState() {
@@ -44,10 +45,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   void _startPolling() {
     _checkActiveRequests();
     _checkOngoingJob();
+    _checkNearbyBookings();
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (_isOnline) {
         _checkActiveRequests();
         _checkOngoingJob();
+        _checkNearbyBookings();
         _updateLiveLocation();
       }
     });
@@ -110,6 +113,278 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       }
     } catch (e) {
       print('Ongoing job check error: $e');
+    }
+  }
+
+  Future<void> _checkNearbyBookings() async {
+    if (!_isOnline) return;
+
+    try {
+      final response = await _apiService.getNearbyBookings(
+        token: widget.userData['token'],
+      );
+      final List<dynamic> bookings = response['bookings'] ?? [];
+
+      if (bookings.isNotEmpty) {
+        final latestBooking = bookings.first;
+        final latestId = latestBooking['id'];
+
+        // Only notify if it's a new booking we haven't shown yet
+        if (_lastNearbyBookingId != latestId) {
+          _lastNearbyBookingId = latestId;
+          if (mounted) {
+            _showBookingNotification(latestBooking);
+          }
+        }
+      }
+    } catch (e) {
+      print('Nearby job polling error: $e');
+    }
+  }
+
+  void _showBookingNotification(Map<String, dynamic> booking) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final goldColor = themeProvider.goldColor;
+    final customer = booking['customer'];
+    final service = booking['service'];
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => Dialog(
+        backgroundColor: themeProvider.isDarkMode
+            ? const Color(0xFF1E1E1E)
+            : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28),
+          side: BorderSide(color: goldColor.withOpacity(0.3), width: 1),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            // Header with Gradient
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    goldColor.withOpacity(0.15),
+                    goldColor.withOpacity(0.05),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: goldColor.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.notifications_active,
+                      color: goldColor,
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: goldColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: goldColor.withOpacity(0.4),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      'NEW NEARBY JOB',
+                      style: TextStyle(
+                        color: goldColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: Column(
+                children: [
+                  Text(
+                    service['name'] ?? 'Luxury Service',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: themeProvider.textColor,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '₱${booking['total_amount']}',
+                    style: TextStyle(
+                      color: goldColor,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Divider(color: Colors.white10),
+                  const SizedBox(height: 20),
+
+                  // Customer & Location
+                  _buildModalRow(
+                    Icons.person_outline,
+                    'Client: ${customer['first_name']} ${customer['last_name']}',
+                    themeProvider,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildModalRow(
+                    Icons.location_on_outlined,
+                    booking['location']['address'],
+                    themeProvider,
+                  ),
+
+                  if (booking['customer_notes'] != null &&
+                      booking['customer_notes'].toString().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _buildModalRow(
+                      Icons.note_alt_outlined,
+                      booking['customer_notes'],
+                      themeProvider,
+                    ),
+                  ],
+
+                  const SizedBox(height: 32),
+
+                  // Action Button
+                  Container(
+                    width: double.infinity,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFFB8860B),
+                          goldColor,
+                          const Color(0xFFFFD700),
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: goldColor.withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _acceptBooking(booking['id']);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        'ACCEPT JOB NOW',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      'DISMISS',
+                      style: TextStyle(
+                        color: themeProvider.textColor.withOpacity(0.5),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModalRow(
+    IconData icon,
+    String text,
+    ThemeProvider themeProvider,
+  ) {
+    return Row(
+      children: [
+        Icon(icon, color: themeProvider.goldColor, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: themeProvider.textColor.withOpacity(0.7),
+              fontSize: 15,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _acceptBooking(int bookingId) async {
+    try {
+      await _apiService.updateBookingStatus(
+        token: widget.userData['token'],
+        bookingId: bookingId,
+        status: 'accepted',
+      );
+      _checkOngoingJob(); // Refresh dashboard
+      _showLuxuryDialog('Booking ACCEPTED!');
+    } catch (e) {
+      _showLuxuryDialog(
+        e.toString().replaceAll('Exception: ', ''),
+        isError: true,
+      );
     }
   }
 

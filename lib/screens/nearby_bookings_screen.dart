@@ -3,8 +3,13 @@ import '../api_service.dart';
 
 class NearbyBookingsScreen extends StatefulWidget {
   final String token;
+  final bool isTab;
 
-  const NearbyBookingsScreen({super.key, required this.token});
+  const NearbyBookingsScreen({
+    super.key,
+    required this.token,
+    this.isTab = false,
+  });
 
   @override
   State<NearbyBookingsScreen> createState() => _NearbyBookingsScreenState();
@@ -22,16 +27,11 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
   }
 
   Future<void> _fetchBookings() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      // For development/web, ensure we have a location record
-      await _apiService.updateLocation(
-        token: widget.token,
-        latitude: 14.5995,
-        longitude: 120.9842,
-      );
-
       final response = await _apiService.getNearbyBookings(token: widget.token);
+      if (!mounted) return;
       setState(() {
         _bookings = response['bookings'];
         _isLoading = false;
@@ -67,81 +67,159 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nearby Available Jobs'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _fetchBookings,
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _bookings.isEmpty
-          ? const Center(child: Text('No nearby jobs found.'))
-          : ListView.builder(
+    const goldColor = Color(0xFFD4AF37);
+
+    final content = _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : _bookings.isEmpty
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.explore_off_outlined,
+                  size: 64,
+                  color: Colors.grey.withOpacity(0.5),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'No nearby jobs found',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+          )
+        : RefreshIndicator(
+            onRefresh: _fetchBookings,
+            child: ListView.builder(
               itemCount: _bookings.length,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(24),
               itemBuilder: (context, index) {
                 final booking = _bookings[index];
                 final customer = booking['customer'];
                 final service = booking['service'];
                 final location = booking['location'];
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              service['name'],
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: goldColor.withOpacity(0.2)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            service['name'],
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                             ),
-                            Text(
-                              '₱${booking['total_amount']}',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const Divider(),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.person),
-                          title: Text(
-                            "${customer['first_name']} ${customer['last_name']}",
                           ),
-                          subtitle: Text(location['address']),
+                          Text(
+                            '₱${booking['total_amount']}',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: goldColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(color: Colors.white10),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.person_outline,
+                            size: 16,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "${customer['first_name']} ${customer['last_name']}",
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on_outlined,
+                            size: 16,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              location['address'],
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFB8860B), goldColor],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
+                        child: ElevatedButton(
                           onPressed: () => _acceptBooking(booking['id']),
                           style: ElevatedButton.styleFrom(
                             minimumSize: const Size(double.infinity, 48),
-                            backgroundColor: Colors.blueAccent,
-                            foregroundColor: Colors.white,
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                          child: const Text('Accept Job'),
+                          child: const Text(
+                            'Accept Job',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 );
               },
             ),
+          );
+
+    if (widget.isTab) {
+      return Padding(padding: const EdgeInsets.only(top: 40), child: content);
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Nearby Jobs'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _fetchBookings,
+          ),
+        ],
+      ),
+      body: content,
     );
   }
 

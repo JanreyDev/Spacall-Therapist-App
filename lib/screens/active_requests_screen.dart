@@ -4,8 +4,13 @@ import 'job_progress_screen.dart';
 
 class ActiveRequestsScreen extends StatefulWidget {
   final String token;
+  final bool isTab;
 
-  const ActiveRequestsScreen({super.key, required this.token});
+  const ActiveRequestsScreen({
+    super.key,
+    required this.token,
+    this.isTab = false,
+  });
 
   @override
   State<ActiveRequestsScreen> createState() => _ActiveRequestsScreenState();
@@ -23,9 +28,11 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
   }
 
   Future<void> _fetchRequests() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final response = await _apiService.getActiveRequests(token: widget.token);
+      if (!mounted) return;
       setState(() {
         _requests = response['bookings'];
         _isLoading = false;
@@ -75,140 +82,207 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Direct Booking Requests'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _fetchRequests,
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _requests.isEmpty
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.notifications_none, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('No new direct requests.'),
-                ],
-              ),
-            )
-          : ListView.builder(
+    final content = _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : _requests.isEmpty
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.notifications_none_rounded,
+                  size: 64,
+                  color: Colors.grey.withOpacity(0.5),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'No new direct requests',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+          )
+        : RefreshIndicator(
+            onRefresh: _fetchRequests,
+            child: ListView.builder(
               itemCount: _requests.length,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(24),
               itemBuilder: (context, index) {
                 final booking = _requests[index];
                 final customer = booking['customer'];
                 final service = booking['service'];
                 final location = booking['location'];
 
-                return Card(
-                  elevation: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 20),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: const Color(0xFFD4AF37).withOpacity(0.2),
+                    ),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.blue[50],
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Text(
-                                'VIP DIRECT REQUEST',
-                                style: TextStyle(
-                                  color: Colors.blue,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD4AF37).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'VIP DIRECT',
+                              style: TextStyle(
+                                color: Color(0xFFD4AF37),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.1,
                               ),
                             ),
-                            Text(
-                              '₱${booking['total_amount']}',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green,
-                              ),
+                          ),
+                          Text(
+                            '₱${booking['total_amount']}',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFD4AF37),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          service['name'],
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        service['name'],
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
-                        const Divider(),
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const CircleAvatar(
-                            child: Icon(Icons.person),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.person_outline,
+                            size: 16,
+                            color: Colors.grey,
                           ),
-                          title: Text(
+                          const SizedBox(width: 8),
+                          Text(
                             "${customer['first_name']} ${customer['last_name']}",
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Text(location['address']),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => _handleStatusUpdate(
-                                  booking['id'],
-                                  'cancelled',
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.all(16),
-                                  side: const BorderSide(color: Colors.red),
-                                  foregroundColor: Colors.red,
-                                ),
-                                child: const Text('Decline'),
-                              ),
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 13,
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on_outlined,
+                            size: 16,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              location['address'],
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () => _handleStatusUpdate(
+                                booking['id'],
+                                'cancelled',
+                              ),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red.shade300,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              child: const Text('Decline'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFFB8860B),
+                                    Color(0xFFD4AF37),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               child: ElevatedButton(
                                 onPressed: () => _handleStatusUpdate(
                                   booking['id'],
                                   'accepted',
                                 ),
                                 style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.all(16),
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
                                 ),
-                                child: const Text('Accept'),
+                                child: const Text(
+                                  'Accept',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 );
               },
             ),
+          );
+
+    if (widget.isTab) {
+      return Padding(padding: const EdgeInsets.only(top: 40), child: content);
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Direct Requests'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _fetchRequests,
+          ),
+        ],
+      ),
+      body: content,
     );
   }
 

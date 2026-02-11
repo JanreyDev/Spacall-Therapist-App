@@ -24,7 +24,7 @@ class EchoPusherClient {
 
 class ApiService {
   static String get baseUrl {
-    return 'https://api.spacall.ph/api';
+    return 'http://192.168.100.6:8000/api';
   }
 
   static String? normalizePhotoUrl(String? url) {

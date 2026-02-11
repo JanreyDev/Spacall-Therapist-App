@@ -6,6 +6,7 @@ import 'login_screen.dart';
 import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'job_progress_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -22,6 +23,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   bool _isUpdating = false;
   String _currentAddress = 'Not set';
   int _requestCount = 0;
+  Map<String, dynamic>? _ongoingBooking;
   Timer? _pollingTimer;
 
   @override
@@ -38,9 +40,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   void _startPolling() {
     _checkActiveRequests();
+    _checkOngoingJob();
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (_isOnline) {
         _checkActiveRequests();
+        _checkOngoingJob();
         _updateLiveLocation();
       }
     });
@@ -74,6 +78,35 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       }
     } catch (e) {
       print('Polling error: $e');
+    }
+  }
+
+  Future<void> _checkOngoingJob() async {
+    try {
+      final response = await _apiService.getCurrentBookings(
+        token: widget.userData['token'],
+      );
+      final List<dynamic> current = response['current'] ?? [];
+
+      // Look for any job that is NOT pending but still active
+      final ongoingStatuses = [
+        'accepted',
+        'en_route',
+        'arrived',
+        'in_progress',
+      ];
+      final ongoing = current.firstWhere(
+        (b) => ongoingStatuses.contains(b['status']),
+        orElse: () => null,
+      );
+
+      if (mounted) {
+        setState(() {
+          _ongoingBooking = ongoing;
+        });
+      }
+    } catch (e) {
+      print('Ongoing job check error: $e');
     }
   }
 
@@ -355,6 +388,65 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              if (_ongoingBooking != null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.green.shade800, Colors.green.shade600],
+                      ),
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.green.withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                      leading: const CircleAvatar(
+                        backgroundColor: Colors.white24,
+                        child: Icon(Icons.play_arrow, color: Colors.white),
+                      ),
+                      title: const Text(
+                        'ONGOING JOB',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${_ongoingBooking!['service']['name']} - ${_ongoingBooking!['status'].toUpperCase()}',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      trailing: const Icon(
+                        Icons.arrow_forward_ios,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => JobProgressScreen(
+                              booking: _ongoingBooking!,
+                              token: token,
+                            ),
+                          ),
+                        ).then((_) => _checkOngoingJob());
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32.0),
                 child: Card(

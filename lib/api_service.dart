@@ -308,6 +308,29 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getCurrentBookings({
+    required String token,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/bookings'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to fetch bookings: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Bookings Fetch Error: $e');
+    }
+  }
+
   Future<Map<String, dynamic>> updateBookingStatus({
     required String token,
     required int bookingId,

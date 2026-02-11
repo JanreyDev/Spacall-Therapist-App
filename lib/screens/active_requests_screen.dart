@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../api_service.dart';
+import 'job_progress_screen.dart';
 
 class ActiveRequestsScreen extends StatefulWidget {
   final String token;
@@ -41,14 +42,28 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
 
   Future<void> _handleStatusUpdate(int bookingId, String status) async {
     try {
-      await _apiService.updateBookingStatus(
+      final response = await _apiService.updateBookingStatus(
         token: widget.token,
         bookingId: bookingId,
         status: status,
       );
+
       if (!mounted) return;
-      _showLuxuryDialog('Booking ${status.toUpperCase()}!');
-      _fetchRequests(); // Refresh list
+
+      if (status == 'accepted') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => JobProgressScreen(
+              booking: response['booking'],
+              token: widget.token,
+            ),
+          ),
+        );
+      } else {
+        _showLuxuryDialog('Booking ${status.toUpperCase()}!');
+        _fetchRequests(); // Refresh list
+      }
     } catch (e) {
       if (!mounted) return;
       _showLuxuryDialog(

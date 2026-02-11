@@ -3,6 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
 import '../api_service.dart';
+import '../widgets/luxury_success_modal.dart';
 
 class JobProgressScreen extends StatefulWidget {
   final Map<String, dynamic> booking;
@@ -33,10 +34,18 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     super.initState();
     _currentStatus = widget.booking['status'];
     final loc = widget.booking['location'];
-    _clientLocation = LatLng(
-      double.parse(loc['latitude'].toString()),
-      double.parse(loc['longitude'].toString()),
-    );
+
+    if (loc != null && loc['latitude'] != null && loc['longitude'] != null) {
+      _clientLocation = LatLng(
+        double.parse(loc['latitude'].toString()),
+        double.parse(loc['longitude'].toString()),
+      );
+    } else {
+      // Default to 0,0 if location is missing (should not happen with loaded booking)
+      _clientLocation = const LatLng(0, 0);
+      debugPrint('Warning: Booking location data is missing!');
+    }
+
     _startTracking();
     _fetchLatestStatus();
   }
@@ -117,15 +126,21 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
       });
       if (status == 'completed' ||
           status == 'cancelled' ||
-          status == 'arrived' ||
-          status == 'in_progress') {
-        if (mounted) Navigator.pop(context);
+          status == 'arrived') {
+        if (mounted) Navigator.pop(context, 'switch_to_sessions');
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update status: $e')));
+      showDialog(
+        context: context,
+        builder: (context) => LuxurySuccessModal(
+          isError: true,
+          title: 'ERROR',
+          message: e.toString().replaceAll('Exception: ', ''),
+          onConfirm: () => Navigator.of(context).pop(),
+        ),
+      );
     }
   }
 

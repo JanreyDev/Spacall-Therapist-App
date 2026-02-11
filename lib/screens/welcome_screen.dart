@@ -9,6 +9,8 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'job_progress_screen.dart';
+import 'booking_history_screen.dart';
+import '../widgets/luxury_success_modal.dart';
 
 class WelcomeScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -373,17 +375,51 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   Future<void> _acceptBooking(int bookingId) async {
     try {
-      await _apiService.updateBookingStatus(
+      final response = await _apiService.updateBookingStatus(
         token: widget.userData['token'],
         bookingId: bookingId,
         status: 'accepted',
       );
-      _checkOngoingJob(); // Refresh dashboard
-      _showLuxuryDialog('Booking ACCEPTED!');
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => LuxurySuccessModal(
+          title: 'SUCCESS',
+          message: 'Booking ACCEPTED! You can now start your journey.',
+          onConfirm: () {
+            Navigator.of(dialogContext).pop(); // Close modal
+
+            // Redirect to job progress
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => JobProgressScreen(
+                  booking: response['booking'],
+                  token: widget.userData['token'],
+                ),
+              ),
+            ).then((result) {
+              if (result == 'switch_to_sessions') {
+                setState(() => _selectedIndex = 3);
+              }
+              _checkOngoingJob();
+            });
+          },
+        ),
+      );
     } catch (e) {
-      _showLuxuryDialog(
-        e.toString().replaceAll('Exception: ', ''),
-        isError: true,
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => LuxurySuccessModal(
+          isError: true,
+          title: 'ERROR',
+          message: e.toString().replaceAll('Exception: ', ''),
+          onConfirm: () => Navigator.of(context).pop(),
+        ),
       );
     }
   }
@@ -496,18 +532,24 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         _apiService.listenForBookings(providerId, (booking) {
           _checkActiveRequests();
           if (!mounted) return;
-          _showLuxuryDialog(
-            'New Booking Request from ${booking['customer']['first_name']}!',
-            actionLabel: 'View',
-            onActionPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                      ActiveRequestsScreen(token: widget.userData['token']),
-                ),
-              );
-            },
+          showDialog(
+            context: context,
+            builder: (context) => LuxurySuccessModal(
+              title: 'New Booking Request',
+              message:
+                  'New Booking Request from ${booking['customer']['first_name']}!',
+              buttonText: 'VIEW',
+              onConfirm: () {
+                Navigator.of(context).pop();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        ActiveRequestsScreen(token: widget.userData['token']),
+                  ),
+                );
+              },
+            ),
           );
         });
       } else {
@@ -515,7 +557,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      _showLuxuryDialog('Failed to update status: $e', isError: true);
+      showDialog(
+        context: context,
+        builder: (context) => LuxurySuccessModal(
+          isError: true,
+          title: 'ERROR',
+          message: 'Failed to update status: $e',
+          onConfirm: () => Navigator.of(context).pop(),
+        ),
+      );
       setState(() {
         _isUpdating = false;
       });
@@ -544,6 +594,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           _buildDashboard(themeProvider),
           ActiveRequestsScreen(token: widget.userData['token'], isTab: true),
           NearbyBookingsScreen(token: widget.userData['token'], isTab: true),
+          BookingHistoryScreen(
+            token: widget.userData['token'],
+            showAppBar: false,
+          ),
           _buildProfile(themeProvider),
         ],
       ),
@@ -609,9 +663,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             label: 'Nearby',
           ),
           const BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline_rounded),
-            activeIcon: Icon(Icons.person_rounded),
-            label: 'Account',
+            icon: Icon(Icons.history_outlined),
+            activeIcon: Icon(Icons.history),
+            label: "Sessions",
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: "Account",
           ),
         ],
       ),
@@ -854,7 +913,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               token: widget.userData['token'],
             ),
           ),
-        ).then((_) => _checkOngoingJob());
+        ).then((result) {
+          if (result == 'switch_to_sessions') {
+            setState(() => _selectedIndex = 3);
+          }
+          _checkOngoingJob();
+        });
       },
       child: Container(
         padding: const EdgeInsets.all(20),
@@ -989,152 +1053,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     String? actionLabel,
     VoidCallback? onActionPressed,
   }) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final goldColor = themeProvider.goldColor;
-
     showDialog(
       context: context,
-      barrierDismissible: !isError,
-      builder: (context) => Dialog(
-        backgroundColor: themeProvider.isDarkMode
-            ? const Color(0xFF1E1E1E)
-            : Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(
-            color: (isError ? Colors.redAccent : goldColor).withOpacity(0.5),
-            width: 1,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isError ? Icons.error_outline : Icons.check_circle_outline,
-                color: isError ? Colors.redAccent : goldColor,
-                size: 48,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                isError ? 'ERROR' : 'SUCCESS',
-                style: TextStyle(
-                  color: goldColor,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: themeProvider.textColor.withOpacity(0.7),
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  if (actionLabel != null && onActionPressed != null) ...[
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(
-                            color: themeProvider.textColor.withOpacity(0.3),
-                          ),
-                          foregroundColor: themeProvider.textColor,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text('DISMISS'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(0xFFB8860B),
-                              goldColor,
-                              const Color(0xFFFFD700),
-                            ],
-                          ),
-                        ),
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            onActionPressed();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text(
-                            actionLabel.toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ] else
-                    Expanded(
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          gradient: LinearGradient(
-                            colors: isError
-                                ? [
-                                    Colors.redAccent.withOpacity(0.8),
-                                    Colors.redAccent,
-                                  ]
-                                : [
-                                    const Color(0xFFB8860B),
-                                    goldColor,
-                                    const Color(0xFFFFD700),
-                                  ],
-                          ),
-                        ),
-                        child: ElevatedButton(
-                          onPressed: () => Navigator.pop(context),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: Text(
-                            'CONTINUE',
-                            style: TextStyle(
-                              color: isError ? Colors.white : Colors.black,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
+      builder: (dialogContext) => LuxurySuccessModal(
+        isError: isError,
+        title: isError ? 'ERROR' : 'SUCCESS',
+        message: message,
+        buttonText: actionLabel?.toUpperCase() ?? 'CONTINUE',
+        onConfirm: () {
+          Navigator.of(dialogContext).pop();
+          if (onActionPressed != null) {
+            onActionPressed();
+          }
+        },
       ),
     );
   }

@@ -24,11 +24,33 @@ class EchoPusherClient {
 
 class ApiService {
   static String get baseUrl {
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      // Physical phone connection via local IP
-      return 'http://192.168.100.6:8000/api';
+    return 'https://api.spacall.ph/api';
+  }
+
+  static String? normalizePhotoUrl(String? url) {
+    if (url == null || url.isEmpty) return null;
+
+    // If it's already a full URL
+    if (url.startsWith('http')) {
+      // Fix stale local URLs that might be in the remote DB
+      if (url.contains('localhost') ||
+          url.contains('127.0.0.1') ||
+          url.contains('10.0.2.2')) {
+        return url
+            .replaceAll('http://localhost', 'https://api.spacall.ph')
+            .replaceAll('http://127.0.0.1', 'https://api.spacall.ph')
+            .replaceAll('http://10.0.2.2', 'https://api.spacall.ph');
+      }
+      return url;
     }
-    return 'http://localhost:8000/api';
+
+    // If it's a relative path, ensure it starts with /storage/
+    String path = url.startsWith('/') ? url : '/$url';
+    if (!path.startsWith('/storage/')) {
+      path = '/storage$path';
+    }
+
+    return 'https://api.spacall.ph$path';
   }
 
   Echo? _echo;

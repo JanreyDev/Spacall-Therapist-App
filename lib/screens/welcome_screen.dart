@@ -283,9 +283,18 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const SizedBox(height: 48),
-              const CircleAvatar(
+              CircleAvatar(
                 radius: 50,
-                child: Icon(Icons.person, size: 50),
+                backgroundImage: user?['profile_photo_url'] != null
+                    ? NetworkImage(
+                        ApiService.normalizePhotoUrl(
+                          user?['profile_photo_url'],
+                        )!,
+                      )
+                    : null,
+                child: user?['profile_photo_url'] == null
+                    ? const Icon(Icons.person, size: 50)
+                    : null,
               ),
               const SizedBox(height: 24),
               Text(

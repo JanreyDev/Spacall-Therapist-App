@@ -63,15 +63,13 @@ class EchoPusherClient {
 
 class ApiService {
   static String get baseUrl {
-    return 'http://192.168.100.6:8000/api';
+    return 'https://api.spacall.ph/api';
   }
 
   static String? normalizePhotoUrl(String? url) {
     if (url == null || url.isEmpty) return null;
 
-    // If it's already a full URL
     if (url.startsWith('http')) {
-      // Fix stale local URLs that might be in the remote DB
       if (url.contains('localhost') ||
           url.contains('127.0.0.1') ||
           url.contains('10.0.2.2')) {
@@ -83,7 +81,6 @@ class ApiService {
       return url;
     }
 
-    // If it's a relative path, ensure it starts with /storage/
     String path = url.startsWith('/') ? url : '/$url';
     if (!path.startsWith('/storage/')) {
       path = '/storage$path';
@@ -101,29 +98,36 @@ class ApiService {
 
     final echoClient = EchoPusherClient(pusher);
 
-    await pusher.init(
-      apiKey: 'spacallkey',
-      cluster: 'mt1',
-      onEvent: (event) {
-        echoClient.handleEvent(event);
-      },
-      onAuthorizer: (channelName, socketId, options) async {
-        final authUrl = '${baseUrl.replaceAll('/api', '')}/broadcasting/auth';
-        final response = await http.post(
-          Uri.parse(authUrl),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-            'Accept': 'application/json',
-          },
-          body: jsonEncode({
-            'socket_id': socketId,
-            'channel_name': channelName,
-          }),
-        );
-        return jsonDecode(response.body);
-      },
-    );
+    try {
+      await pusher.init(
+        apiKey: 'spacallkey',
+        cluster: 'mt1',
+        useTLS: true,
+        host: 'api.spacall.ph',
+        wssPort: 443,
+        onEvent: (event) {
+          echoClient.handleEvent(event);
+        },
+        onAuthorizer: (channelName, socketId, options) async {
+          final authUrl = '${baseUrl.replaceAll('/api', '')}/broadcasting/auth';
+          final response = await http.post(
+            Uri.parse(authUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'socket_id': socketId,
+              'channel_name': channelName,
+            }),
+          );
+          return jsonDecode(response.body);
+        },
+      );
+    } catch (e) {
+      print("Pusher init error: $e");
+    }
 
     await pusher.connect();
 
@@ -135,7 +139,7 @@ class ApiService {
   void listenForBookings(int providerId, Function(dynamic) onBookingReceived) {
     if (_echo == null) return;
 
-    _echo!.private('therapist.$providerId').listen('BookingRequested', (e) {
+    _echo!.private('therapist.$providerId').listen('.BookingRequested', (e) {
       print('Real-time booking received: $e');
       onBookingReceived(e['booking']);
     });

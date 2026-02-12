@@ -154,10 +154,19 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(showMap ? 'Job Progress' : 'Session Details'),
+        title: Text(
+          showMap ? 'JOB PROGRESS' : 'SESSION DETAILS',
+          style: const TextStyle(
+            color: goldColor,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+          ),
+        ),
+        centerTitle: true,
         backgroundColor: Colors.black,
-        foregroundColor: goldColor,
         elevation: 0,
+        iconTheme: const IconThemeData(color: goldColor),
       ),
       body: Stack(
         children: [
@@ -237,51 +246,109 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Section
+          // Header Section - Centered Luxury Card
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
             decoration: BoxDecoration(
               color: const Color(0xFF1E1E1E),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: goldColor.withOpacity(0.3)),
+              border: Border.all(color: const Color(0xFF3A3A3A), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.5),
+                  blurRadius: 10,
+                  spreadRadius: 0,
+                ),
+              ],
             ),
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircleAvatar(
-                  radius: 40,
-                  backgroundColor: goldColor,
-                  child: const Icon(
-                    Icons.person,
-                    size: 40,
-                    color: Colors.black,
-                  ),
+                Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: goldColor,
+                        boxShadow: [
+                          BoxShadow(
+                            color: goldColor.withOpacity(0.3),
+                            blurRadius: 15,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                      ),
+                    ),
+                    CircleAvatar(
+                      radius: 46,
+                      backgroundColor: Colors.black,
+                      child: Icon(Icons.person, size: 50, color: goldColor),
+                    ),
+                    // Overlapping accent profile (Client)
+                    Positioned(
+                      top: 0,
+                      right: -10,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: CircleAvatar(
+                          radius: 18,
+                          backgroundColor: Colors.grey[800],
+                          backgroundImage: customer['profile_photo_url'] != null
+                              ? NetworkImage(
+                                  ApiService.normalizePhotoUrl(
+                                    customer['profile_photo_url'],
+                                  )!,
+                                )
+                              : null,
+                          child: customer['profile_photo_url'] == null
+                              ? const Icon(
+                                  Icons.person,
+                                  size: 18,
+                                  color: Colors.white,
+                                )
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 Text(
-                  '${customer['first_name'] ?? 'Client'} ${customer['last_name'] ?? ''}',
+                  'Client ${customer['first_name'] ?? 'Guest'} ${customer['last_name'] ?? ''}',
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 22,
+                    fontSize: 26,
                     fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
+                    horizontal: 24,
+                    vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: goldColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
+                    color: goldColor,
+                    borderRadius: BorderRadius.circular(25),
                   ),
                   child: Text(
                     _getFriendlyStatus(),
-                    style: TextStyle(
-                      color: goldColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                      letterSpacing: 1.2,
                     ),
                   ),
                 ),
@@ -290,36 +357,35 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
           ),
           const SizedBox(height: 30),
 
-          // Service Details
-          const Text(
+          Text(
             'SERVICE DETAILS',
             style: TextStyle(
-              color: Colors.grey,
-              fontSize: 12,
-              letterSpacing: 1.5,
-              fontWeight: FontWeight.bold,
+              color: const Color(0xFF505050),
+              fontSize: 11,
+              letterSpacing: 2.0,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 16),
           _buildDetailItem(
-            Icons.spa_outlined,
+            Icons.spa,
             'Service',
             service['name'] ?? 'Luxury Treatment',
           ),
           _buildDetailItem(
-            Icons.payments_outlined,
+            Icons.payments,
             'Amount Due',
             '₱${widget.booking['total_amount'] ?? '0.00'}',
           ),
           _buildDetailItem(
-            Icons.location_on_outlined,
+            Icons.location_on,
             'Location',
             location['address'] ?? 'Customer Location',
           ),
           if (widget.booking['customer_notes'] != null &&
               widget.booking['customer_notes'].toString().isNotEmpty)
             _buildDetailItem(
-              Icons.notes_rounded,
+              Icons.menu,
               'Notes',
               widget.booking['customer_notes'],
             ),
@@ -329,17 +395,20 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
           // Control Buttons
           _buildActionButton(),
           const SizedBox(height: 16),
-          if (_currentStatus == 'arrived' || _currentStatus == 'in_progress')
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  'BACK TO SESSIONS',
-                  style: TextStyle(color: Colors.white60),
+          const SizedBox(height: 24),
+          Center(
+            child: TextButton(
+              onPressed: () => Navigator.pop(context, 'switch_to_sessions'),
+              child: Text(
+                'BACK TO SESSIONS',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
@@ -371,15 +440,21 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  label,
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  label.toUpperCase(),
+                  style: const TextStyle(
+                    color: Color(0xFF4A4A4A),
+                    fontSize: 10,
+                    letterSpacing: 1.5,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
+                const SizedBox(height: 6),
                 Text(
                   value,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
@@ -473,14 +548,15 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         style: ElevatedButton.styleFrom(
           backgroundColor: goldColor,
           foregroundColor: Colors.black,
+          elevation: 10,
+          shadowColor: goldColor.withOpacity(0.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
           ),
-          elevation: 5,
         ),
         child: Text(
           text,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
         ),
       ),
     );

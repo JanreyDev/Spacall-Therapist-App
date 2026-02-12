@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../api_service.dart';
 import '../theme_provider.dart';
-import 'nearby_bookings_screen.dart';
-import 'active_requests_screen.dart';
+import 'consolidated_requests_screen.dart';
 import 'login_screen.dart';
 import 'dart:async';
 import 'package:geolocator/geolocator.dart';
@@ -26,11 +25,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   bool _isOnline = false;
   bool _isUpdating = false;
   String _currentAddress = 'Not set';
-  int _requestCount = 0;
+  int _directRequestCount = 0;
+  int _nearbyRequestCount = 0;
   Map<String, dynamic>? _ongoingBooking;
   Timer? _pollingTimer;
   int _selectedIndex = 0;
   int? _lastNearbyBookingId;
+
+  int get _totalRequestCount => _directRequestCount + _nearbyRequestCount;
 
   @override
   void initState() {
@@ -81,7 +83,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       final List<dynamic> requests = response['bookings'] ?? [];
       if (mounted) {
         setState(() {
-          _requestCount = requests.length;
+          _directRequestCount = requests.length;
         });
       }
     } catch (e) {
@@ -137,6 +139,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           if (mounted) {
             _showBookingNotification(latestBooking);
           }
+        }
+
+        // Update nearby count for the tab badge
+        if (mounted) {
+          setState(() {
+            _nearbyRequestCount = bookings.length;
+          });
+        }
+      } else {
+        // Clear nearby count if no bookings
+        if (mounted) {
+          setState(() {
+            _nearbyRequestCount = 0;
+          });
         }
       }
     } catch (e) {
@@ -403,7 +419,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               ),
             ).then((result) {
               if (result == 'switch_to_sessions') {
-                setState(() => _selectedIndex = 3);
+                setState(() => _selectedIndex = 2);
               }
               _checkOngoingJob();
             });
@@ -541,13 +557,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               buttonText: 'VIEW',
               onConfirm: () {
                 Navigator.of(context).pop();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        ActiveRequestsScreen(token: widget.userData['token']),
-                  ),
-                );
+                setState(() => _selectedIndex = 1);
               },
             ),
           );
@@ -592,8 +602,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         index: _selectedIndex,
         children: [
           _buildDashboard(themeProvider),
-          ActiveRequestsScreen(token: widget.userData['token'], isTab: true),
-          NearbyBookingsScreen(token: widget.userData['token'], isTab: true),
+          ConsolidatedRequestsScreen(token: widget.userData['token']),
           BookingHistoryScreen(
             token: widget.userData['token'],
             showAppBar: false,
@@ -636,7 +645,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             icon: Stack(
               children: [
                 const Icon(Icons.notifications_none_rounded),
-                if (_requestCount > 0)
+                if (_totalRequestCount > 0)
                   Positioned(
                     right: 0,
                     top: 0,
@@ -650,17 +659,21 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                         minWidth: 12,
                         minHeight: 12,
                       ),
+                      child: Text(
+                        '$_totalRequestCount',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
               ],
             ),
             activeIcon: const Icon(Icons.notifications_rounded),
             label: 'Requests',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.explore_outlined),
-            activeIcon: Icon(Icons.explore),
-            label: 'Nearby',
           ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.history_outlined),

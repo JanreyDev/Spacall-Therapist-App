@@ -243,7 +243,7 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
           );
 
     if (widget.isTab) {
-      return Padding(padding: const EdgeInsets.only(top: 40), child: content);
+      return content;
     }
 
     return Scaffold(

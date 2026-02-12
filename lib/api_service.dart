@@ -447,4 +447,23 @@ class ApiService {
       throw Exception('Status Fetch Error: $e');
     }
   }
+
+  Future<void> deleteAccount(String token) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/auth/account'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to delete account: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Delete Account Error: $e');
+    }
+  }
 }

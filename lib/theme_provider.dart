@@ -27,7 +27,7 @@ class ThemeProvider extends ChangeNotifier {
   // Common colors for Therapist App (matched with Client App)
   Color get goldColor => const Color(0xFFD4AF37);
   Color get backgroundColor =>
-      _isDarkMode ? const Color(0xFF121212) : const Color(0xFFFAFAFA);
+      _isDarkMode ? const Color(0xFF000000) : const Color(0xFFFAFAFA);
   Color get textColor => _isDarkMode ? Colors.white : Colors.black87;
   Color get subtextColor =>
       _isDarkMode ? Colors.white.withOpacity(0.5) : Colors.black54;

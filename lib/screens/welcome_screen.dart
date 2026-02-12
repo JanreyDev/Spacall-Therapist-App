@@ -3,12 +3,13 @@ import 'package:provider/provider.dart';
 import '../api_service.dart';
 import '../theme_provider.dart';
 import 'consolidated_requests_screen.dart';
-import 'login_screen.dart';
+
 import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'job_progress_screen.dart';
 import 'booking_history_screen.dart';
+import 'account_screen.dart';
 import '../widgets/luxury_success_modal.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -591,22 +592,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
   }
 
-  Future<void> _handleLogout(BuildContext context) async {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
-      (route) => false,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final goldColor = themeProvider.goldColor;
-    final backgroundColor = themeProvider.backgroundColor;
 
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: themeProvider.backgroundColor,
       body: IndexedStack(
         index: _selectedIndex,
         children: [
@@ -616,7 +608,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             token: widget.userData['token'],
             showAppBar: false,
           ),
-          _buildProfile(themeProvider),
+          AccountScreen(userData: widget.userData),
         ],
       ),
       bottomNavigationBar: _buildBottomNav(goldColor, themeProvider),
@@ -626,15 +618,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Widget _buildBottomNav(Color goldColor, ThemeProvider themeProvider) {
     return Container(
       decoration: BoxDecoration(
-        color: themeProvider.backgroundColor,
-        border: Border(
-          top: BorderSide(
-            color: themeProvider.isDarkMode
-                ? Colors.white.withOpacity(0.05)
-                : Colors.black.withOpacity(0.05),
-            width: 1,
-          ),
-        ),
+        color: const Color(0xFF1E1E1E),
+        border: Border(top: BorderSide(color: Colors.white12, width: 1)),
       ),
       child: BottomNavigationBar(
         currentIndex: _selectedIndex,
@@ -709,21 +694,151 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         : "Therapist";
 
     return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Custom Luxury Header
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 60, 24, 32),
-            decoration: BoxDecoration(
-              color: themeProvider.isDarkMode
-                  ? Colors.white.withOpacity(0.02)
-                  : Colors.black.withOpacity(0.02),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 30,
+          // New Header Layout
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Location
+              Expanded(
+                child: Row(
+                  children: [
+                    Icon(Icons.location_on, color: goldColor, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _currentAddress,
+                        style: TextStyle(
+                          color: themeProvider.subtextColor,
+                          fontSize: 13,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Status Toggle
+              const SizedBox(width: 16),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _isOnline ? Colors.green : Colors.grey,
+                      shape: BoxShape.circle,
+                      boxShadow: _isOnline
+                          ? [
+                              BoxShadow(
+                                color: Colors.green.withOpacity(0.5),
+                                blurRadius: 4,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Transform.scale(
+                    scale: 0.8,
+                    child: Switch.adaptive(
+                      value: _isOnline,
+                      onChanged: _isUpdating ? null : _toggleOnline,
+                      activeColor: goldColor,
+                      activeTrackColor: goldColor.withOpacity(0.3),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 32),
+
+          // Greeting & Profile
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Gold Verification Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: goldColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: goldColor.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.verified, color: goldColor, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            'VERIFIED',
+                            style: TextStyle(
+                              color: goldColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Welcome back,',
+                      style: TextStyle(
+                        color: themeProvider.subtextColor,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      name,
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: goldColor.withOpacity(0.5),
+                    width: 2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: goldColor.withOpacity(0.2),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: CircleAvatar(
+                  radius: 32,
                   backgroundColor: goldColor.withOpacity(0.1),
                   backgroundImage: user?['profile_photo_url'] != null
                       ? NetworkImage(
@@ -733,196 +848,170 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                         )
                       : null,
                   child: user?['profile_photo_url'] == null
-                      ? Icon(Icons.person, color: goldColor, size: 30)
+                      ? Icon(Icons.person, color: goldColor, size: 32)
                       : null,
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Welcome back,',
-                        style: TextStyle(
-                          color: themeProvider.subtextColor,
-                          fontSize: 14,
-                        ),
-                      ),
-                      Text(
-                        name,
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => _handleLogout(context),
-                  icon: Icon(
-                    Icons.power_settings_new_rounded,
-                    color: Colors.red.shade400,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Availability Section
-                _buildStatusCard(goldColor, themeProvider),
-
-                const SizedBox(height: 24),
-
-                if (_ongoingBooking != null) ...[
-                  _buildOngoingJobCard(goldColor, themeProvider),
-                  const SizedBox(height: 24),
-                ],
-
-                // Location Card
-                _buildInfoCard(
-                  Icons.location_on_outlined,
-                  'Current Location',
-                  _currentAddress,
-                  themeProvider,
-                  iconColor: Colors.red.shade300,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Review Status
-                _buildInfoCard(
-                  Icons.verified_user_outlined,
-                  'Verification Status',
-                  'Under Review', // Dynamically check verification_status if available
-                  themeProvider,
-                  iconColor: Colors.orange.shade300,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusCard(Color goldColor, ThemeProvider themeProvider) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: themeProvider.isDarkMode
-            ? Colors.white.withOpacity(0.05)
-            : Colors.black.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: _isOnline ? goldColor.withOpacity(0.3) : Colors.transparent,
-        ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: (_isOnline ? goldColor : Colors.grey).withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  _isOnline ? Icons.visibility : Icons.visibility_off,
-                  color: _isOnline ? goldColor : Colors.grey,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Service Visibility',
-                      style: TextStyle(
-                        color: themeProvider.textColor,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      _isOnline
-                          ? 'Available for bookings'
-                          : 'Hidden from clients',
-                      style: TextStyle(
-                        color: themeProvider.subtextColor,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Switch.adaptive(
-                value: _isOnline,
-                onChanged: _isUpdating ? null : _toggleOnline,
-                activeColor: goldColor,
-                activeTrackColor: goldColor.withOpacity(0.3),
               ),
             ],
           ),
+
+          const SizedBox(height: 40),
+
+          // Reordered Content: Wallet FIRST
+          _buildWalletSection(goldColor, themeProvider),
+          const SizedBox(height: 24),
+
+          // Stats SECOND
+          _buildStatsSection(goldColor, themeProvider),
+          const SizedBox(height: 24),
+
+          // Ongoing Job
+          if (_ongoingBooking != null) ...[
+            _buildOngoingJobCard(goldColor, themeProvider),
+            const SizedBox(height: 24),
+          ],
+
+          // Extra bottom padding for scrolling
+          const SizedBox(height: 100),
         ],
       ),
     );
   }
 
-  Widget _buildInfoCard(
-    IconData icon,
-    String title,
-    String value,
-    ThemeProvider themeProvider, {
-    Color? iconColor,
+  Widget _buildStatsSection(Color goldColor, ThemeProvider themeProvider) {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildStatCard(
+            title: 'Sessions',
+            value: '12', // Mock data
+            icon: Icons.spa_outlined,
+            goldColor: goldColor,
+            themeProvider: themeProvider,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildStatCard(
+            title: 'Rating',
+            value: '4.9', // Mock data
+            icon: Icons.star_border_rounded,
+            goldColor: goldColor,
+            themeProvider: themeProvider,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildStatCard(
+            title: 'Earnings',
+            value: '₱2.5k', // Mock data
+            icon: Icons.account_balance_wallet_outlined,
+            goldColor: goldColor,
+            themeProvider: themeProvider,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color goldColor,
+    required ThemeProvider themeProvider,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       decoration: BoxDecoration(
-        color: themeProvider.isDarkMode
-            ? Colors.white.withOpacity(0.03)
-            : Colors.black.withOpacity(0.03),
+        color: const Color(0xFF1E1E1E),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: goldColor, size: 24),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              color: themeProvider.textColor,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: TextStyle(color: themeProvider.subtextColor, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWalletSection(Color goldColor, ThemeProvider themeProvider) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [goldColor.withOpacity(0.2), goldColor.withOpacity(0.05)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: goldColor.withOpacity(0.2), width: 1),
       ),
       child: Row(
         children: [
-          Icon(icon, color: iconColor ?? themeProvider.goldColor, size: 22),
-          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  'Wallet Balance',
                   style: TextStyle(
                     color: themeProvider.subtextColor,
-                    fontSize: 12,
+                    fontSize: 14,
                   ),
                 ),
+                const SizedBox(height: 4),
                 Text(
-                  value,
+                  '₱ 12,450.00', // Mock data
                   style: TextStyle(
-                    color: themeProvider.textColor,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    color: goldColor,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // TODO: Implement withdraw functionality
+              _showLuxuryDialog('Withdraw feature coming soon!');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: goldColor,
+              foregroundColor: Colors.black,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+            child: const Text(
+              'Withdraw',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
         ],
       ),
     );
   }
+
+  // _buildStatusCard removed
 
   Widget _buildOngoingJobCard(Color goldColor, ThemeProvider themeProvider) {
     return GestureDetector(
@@ -1009,62 +1098,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildProfile(ThemeProvider themeProvider) {
-    final user = widget.userData['user'];
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 60,
-            backgroundImage: user?['profile_photo_url'] != null
-                ? NetworkImage(
-                    ApiService.normalizePhotoUrl(user!['profile_photo_url'])!,
-                  )
-                : null,
-            child: user?['profile_photo_url'] == null
-                ? Icon(Icons.person, size: 60, color: themeProvider.goldColor)
-                : null,
-          ),
-          const SizedBox(height: 24),
-          Text(
-            user?['first_name'] ?? 'User',
-            style: TextStyle(
-              color: themeProvider.textColor,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 40),
-          _buildInfoCard(
-            Icons.verified_outlined,
-            'Status',
-            'Verified',
-            themeProvider,
-          ),
-          const SizedBox(height: 12),
-          _buildInfoCard(
-            Icons.settings_outlined,
-            'Settings',
-            'Preferences',
-            themeProvider,
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () => _handleLogout(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.withOpacity(0.1),
-              foregroundColor: Colors.red,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-            ),
-            child: const Text('Logout'),
-          ),
-        ],
       ),
     );
   }

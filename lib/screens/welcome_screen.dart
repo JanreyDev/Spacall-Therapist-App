@@ -31,6 +31,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Timer? _pollingTimer;
   int _selectedIndex = 0;
   int? _lastNearbyBookingId;
+  int? _lastDirectBookingId;
 
   int get _totalRequestCount => _directRequestCount + _nearbyRequestCount;
 
@@ -81,6 +82,23 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         token: widget.userData['token'],
       );
       final List<dynamic> requests = response['bookings'] ?? [];
+
+      if (requests.isNotEmpty) {
+        // Sort by created_at desc to get latest
+        // (Assuming API returns sorted, but good to be safe if we rely on "latest")
+        // actually API sorts by created_at desc.
+
+        final latestBooking = requests.first;
+        final latestId = latestBooking['id'];
+
+        if (_lastDirectBookingId != latestId) {
+          _lastDirectBookingId = latestId;
+          if (mounted) {
+            _showBookingNotification(latestBooking, isDirect: true);
+          }
+        }
+      }
+
       if (mounted) {
         setState(() {
           _directRequestCount = requests.length;
@@ -137,7 +155,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         if (_lastNearbyBookingId != latestId) {
           _lastNearbyBookingId = latestId;
           if (mounted) {
-            _showBookingNotification(latestBooking);
+            _showBookingNotification(latestBooking, isDirect: false);
           }
         }
 
@@ -160,7 +178,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
   }
 
-  void _showBookingNotification(Map<String, dynamic> booking) {
+  void _showBookingNotification(
+    Map<String, dynamic> booking, {
+    bool isDirect = false,
+  }) {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final goldColor = themeProvider.goldColor;
     final customer = booking['customer'];
@@ -235,7 +256,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       ),
                     ),
                     child: Text(
-                      'NEW NEARBY JOB',
+                      isDirect ? 'DIRECT REQUEST' : 'NEW NEARBY JOB',
                       style: TextStyle(
                         color: goldColor,
                         fontSize: 12,
@@ -548,19 +569,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         _apiService.listenForBookings(providerId, (booking) {
           _checkActiveRequests();
           if (!mounted) return;
-          showDialog(
-            context: context,
-            builder: (context) => LuxurySuccessModal(
-              title: 'New Booking Request',
-              message:
-                  'New Booking Request from ${booking['customer']['first_name']}!',
-              buttonText: 'VIEW',
-              onConfirm: () {
-                Navigator.of(context).pop();
-                setState(() => _selectedIndex = 1);
-              },
-            ),
-          );
+          _showBookingNotification(booking, isDirect: true);
         });
       } else {
         _apiService.disconnectEcho();

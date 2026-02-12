@@ -5,20 +5,59 @@ import 'package:image_picker/image_picker.dart';
 import 'package:laravel_echo/laravel_echo.dart';
 import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
 
+class PusherChannelWrapper {
+  final String name;
+  final Map<String, List<Function(dynamic)>> _bindings = {};
+
+  PusherChannelWrapper(this.name);
+
+  void bind(String event, Function callback) {
+    if (!_bindings.containsKey(event)) {
+      _bindings[event] = [];
+    }
+    _bindings[event]!.add((data) => callback(data));
+  }
+
+  void unbind(String event) {
+    _bindings.remove(event);
+  }
+
+  void handleEvent(String event, dynamic data) {
+    if (_bindings.containsKey(event)) {
+      for (var callback in _bindings[event]!) {
+        callback(data);
+      }
+    }
+  }
+}
+
 class EchoPusherClient {
   final PusherChannelsFlutter pusher;
+  final Map<String, PusherChannelWrapper> channels = {};
+
   EchoPusherClient(this.pusher);
 
   void disconnect() => pusher.disconnect();
 
   Future<void> connect() => pusher.connect();
 
-  Future<dynamic> subscribe(String channelName) {
-    return pusher.subscribe(channelName: channelName);
+  PusherChannelWrapper subscribe(String channelName) {
+    pusher.subscribe(channelName: channelName);
+    if (!channels.containsKey(channelName)) {
+      channels[channelName] = PusherChannelWrapper(channelName);
+    }
+    return channels[channelName]!;
   }
 
-  Future<void> unsubscribe(String channelName) {
-    return pusher.unsubscribe(channelName: channelName);
+  void unsubscribe(String channelName) {
+    pusher.unsubscribe(channelName: channelName);
+    channels.remove(channelName);
+  }
+
+  void handleEvent(PusherEvent event) {
+    if (channels.containsKey(event.channelName)) {
+      channels[event.channelName]!.handleEvent(event.eventName, event.data);
+    }
   }
 }
 
@@ -60,9 +99,14 @@ class ApiService {
 
     final pusher = PusherChannelsFlutter.getInstance();
 
+    final echoClient = EchoPusherClient(pusher);
+
     await pusher.init(
       apiKey: 'spacallkey',
       cluster: 'mt1',
+      onEvent: (event) {
+        echoClient.handleEvent(event);
+      },
       onAuthorizer: (channelName, socketId, options) async {
         final authUrl = '${baseUrl.replaceAll('/api', '')}/broadcasting/auth';
         final response = await http.post(
@@ -83,10 +127,7 @@ class ApiService {
 
     await pusher.connect();
 
-    _echo = Echo(
-      client: EchoPusherClient(pusher),
-      broadcaster: EchoBroadcasterType.Pusher,
-    );
+    _echo = Echo(client: echoClient, broadcaster: EchoBroadcasterType.Pusher);
 
     print('Echo initialized for therapist.$providerId');
   }

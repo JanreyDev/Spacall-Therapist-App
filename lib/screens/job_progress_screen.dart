@@ -148,61 +148,78 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   Widget build(BuildContext context) {
     const goldColor = Color(0xFFD4AF37);
 
+    // If en_route, show Map. Otherwise (arrived, in_progress), show details.
+    bool showMap = _currentStatus == 'en_route' || _currentStatus == 'accepted';
+
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Job Progress'),
+        title: Text(showMap ? 'Job Progress' : 'Session Details'),
         backgroundColor: Colors.black,
         foregroundColor: goldColor,
+        elevation: 0,
       ),
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: _clientLocation,
-              zoom: 14,
-            ),
-            onMapCreated: (controller) => _mapController = controller,
-            myLocationEnabled: true,
-            markers: {
-              Marker(
-                markerId: const MarkerId('client'),
-                position: _clientLocation,
-                infoWindow: const InfoWindow(title: 'Client Location'),
-                icon: BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueAzure,
-                ),
+          if (showMap)
+            GoogleMap(
+              initialCameraPosition: CameraPosition(
+                target: _clientLocation,
+                zoom: 14,
               ),
-              if (_currentPosition != null)
+              onMapCreated: (controller) => _mapController = controller,
+              myLocationEnabled: true,
+              markers: {
                 Marker(
-                  markerId: const MarkerId('therapist'),
-                  position: _currentPosition!,
-                  infoWindow: const InfoWindow(title: 'Your Location'),
+                  markerId: const MarkerId('client'),
+                  position: _clientLocation,
+                  infoWindow: const InfoWindow(title: 'Client Location'),
                   icon: BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueYellow,
+                    BitmapDescriptor.hueAzure,
                   ),
                 ),
-            },
-          ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
-                color: Color(0xFF1A1A1A),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildInfoRow(),
-                  const SizedBox(height: 20),
-                  _buildActionButton(),
-                ],
+                if (_currentPosition != null)
+                  Marker(
+                    markerId: const MarkerId('therapist'),
+                    position: _currentPosition!,
+                    infoWindow: const InfoWindow(title: 'Your Location'),
+                    icon: BitmapDescriptor.defaultMarkerWithHue(
+                      BitmapDescriptor.hueYellow,
+                    ),
+                  ),
+              },
+            )
+          else
+            _buildDetailsView(goldColor),
+
+          if (showMap)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black54,
+                      blurRadius: 10,
+                      offset: Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildInfoRow(),
+                    const SizedBox(height: 20),
+                    _buildActionButton(),
+                  ],
+                ),
               ),
             ),
-          ),
           if (_isLoading)
             const Center(child: CircularProgressIndicator(color: goldColor)),
         ],
@@ -210,8 +227,173 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     );
   }
 
+  Widget _buildDetailsView(Color goldColor) {
+    final customer = widget.booking['customer'] ?? {};
+    final service = widget.booking['service'] ?? {};
+    final location = widget.booking['location'] ?? {};
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Section
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: goldColor.withOpacity(0.3)),
+            ),
+            child: Column(
+              children: [
+                CircleAvatar(
+                  radius: 40,
+                  backgroundColor: goldColor,
+                  child: const Icon(
+                    Icons.person,
+                    size: 40,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '${customer['first_name'] ?? 'Client'} ${customer['last_name'] ?? ''}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: goldColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _getFriendlyStatus(),
+                    style: TextStyle(
+                      color: goldColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 30),
+
+          // Service Details
+          const Text(
+            'SERVICE DETAILS',
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 12,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildDetailItem(
+            Icons.spa_outlined,
+            'Service',
+            service['name'] ?? 'Luxury Treatment',
+          ),
+          _buildDetailItem(
+            Icons.payments_outlined,
+            'Amount Due',
+            '₱${widget.booking['total_amount'] ?? '0.00'}',
+          ),
+          _buildDetailItem(
+            Icons.location_on_outlined,
+            'Location',
+            location['address'] ?? 'Customer Location',
+          ),
+          if (widget.booking['customer_notes'] != null &&
+              widget.booking['customer_notes'].toString().isNotEmpty)
+            _buildDetailItem(
+              Icons.notes_rounded,
+              'Notes',
+              widget.booking['customer_notes'],
+            ),
+
+          const SizedBox(height: 40),
+
+          // Control Buttons
+          _buildActionButton(),
+          const SizedBox(height: 16),
+          if (_currentStatus == 'arrived' || _currentStatus == 'in_progress')
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'BACK TO SESSIONS',
+                  style: TextStyle(color: Colors.white60),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _getFriendlyStatus() {
+    switch (_currentStatus) {
+      case 'arrived':
+        return 'READY TO START';
+      case 'in_progress':
+        return 'SESSION ACTIVE';
+      case 'completed':
+        return 'COMPLETED';
+      default:
+        return _currentStatus.replaceAll('_', ' ').toUpperCase();
+    }
+  }
+
+  Widget _buildDetailItem(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: const Color(0xFFD4AF37), size: 24),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInfoRow() {
-    final customer = widget.booking['customer'];
+    final customer = widget.booking['customer'] ?? {};
+    final location = widget.booking['location'] ?? {};
+
     return Row(
       children: [
         const CircleAvatar(radius: 25, child: Icon(Icons.person)),
@@ -221,7 +403,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${customer['first_name']} ${customer['last_name']}',
+                '${customer['first_name'] ?? 'Client'} ${customer['last_name'] ?? ''}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -229,7 +411,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                 ),
               ),
               Text(
-                widget.booking['location']['address'],
+                location['address'] ?? 'Client Location',
                 style: const TextStyle(color: Colors.white70, fontSize: 14),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -260,7 +442,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   Widget _buildActionButton() {
     String text = '';
     String nextStatus = '';
-    Color color = Colors.green;
+    const goldColor = Color(0xFFD4AF37);
 
     switch (_currentStatus) {
       case 'accepted':
@@ -289,11 +471,12 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
       child: ElevatedButton(
         onPressed: () => _updateStatus(nextStatus),
         style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.white,
+          backgroundColor: goldColor,
+          foregroundColor: Colors.black,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
           ),
+          elevation: 5,
         ),
         child: Text(
           text,

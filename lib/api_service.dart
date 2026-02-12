@@ -466,4 +466,30 @@ class ApiService {
       throw Exception('Delete Account Error: $e');
     }
   }
+
+  Future<Map<String, dynamic>> getProfile(String token) async {
+    try {
+      final url = '$baseUrl/therapist/profile';
+      print('Calling API: GET $url'); // Debug Log
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      print('Profile response status: ${response.statusCode}'); // Debug Log
+      print('Profile response body: ${response.body}'); // Debug Log
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to fetch profile: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Profile Fetch Error: $e');
+    }
+  }
 }

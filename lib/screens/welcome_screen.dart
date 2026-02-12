@@ -32,13 +32,18 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Timer? _pollingTimer;
   int _selectedIndex = 0;
   int? _lastNearbyBookingId;
+
   int? _lastDirectBookingId;
+  double _walletBalance = 0.00;
+  String _verificationStatus = 'pending'; // pending, verified, rejected
+  String _currency = 'PHP';
 
   int get _totalRequestCount => _directRequestCount + _nearbyRequestCount;
 
   @override
   void initState() {
     super.initState();
+    print("WelcomeScreen initialized - Dynamic Dashboard");
     _startPolling();
   }
 
@@ -49,11 +54,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   void _startPolling() {
+    _fetchProfile();
     _checkActiveRequests();
     _checkOngoingJob();
     _checkNearbyBookings();
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (_isOnline) {
+        _fetchProfile();
         _checkActiveRequests();
         _checkOngoingJob();
         _checkNearbyBookings();
@@ -74,6 +81,28 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       await _getAddressFromLatLng(position);
     } catch (e) {
       print('Periodic location update error: $e');
+    }
+  }
+
+  Future<void> _fetchProfile() async {
+    try {
+      final profile = await _apiService.getProfile(widget.userData['token']);
+      final user = profile['user'];
+      if (mounted) {
+        setState(() {
+          // Adjust parsing based on actual API response structure
+          _walletBalance =
+              double.tryParse(user['wallet_balance'].toString()) ?? 0.00;
+          // Map is_verified (bool) to status string
+          bool isVerified =
+              user['is_verified'] == true || user['is_verified'] == 1;
+          _verificationStatus = isVerified ? 'verified' : 'pending';
+
+          // _currency = user['currency'] ?? 'PHP';
+        });
+      }
+    } catch (e) {
+      print('Error fetching profile: $e');
     }
   }
 
@@ -769,29 +798,57 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Gold Verification Badge
+                    // Dynamic Verification Badge
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: goldColor.withOpacity(0.15),
+                        color: _verificationStatus == 'verified'
+                            ? goldColor.withOpacity(0.15)
+                            : (_verificationStatus == 'rejected'
+                                  ? Colors.red.withOpacity(0.15)
+                                  : Colors.orange.withOpacity(0.15)),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: goldColor.withOpacity(0.3),
+                          color: _verificationStatus == 'verified'
+                              ? goldColor.withOpacity(0.3)
+                              : (_verificationStatus == 'rejected'
+                                    ? Colors.red.withOpacity(0.3)
+                                    : Colors.orange.withOpacity(0.3)),
                           width: 1,
                         ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.verified, color: goldColor, size: 14),
+                          Icon(
+                            _verificationStatus == 'verified'
+                                ? Icons.verified
+                                : (_verificationStatus == 'rejected'
+                                      ? Icons.cancel
+                                      : Icons.pending),
+                            color: _verificationStatus == 'verified'
+                                ? goldColor
+                                : (_verificationStatus == 'rejected'
+                                      ? Colors.red
+                                      : Colors.orange),
+                            size: 14,
+                          ),
                           const SizedBox(width: 4),
                           Text(
-                            'VERIFIED',
+                            _verificationStatus == 'verified'
+                                ? 'VERIFIED'
+                                : (_verificationStatus == 'rejected'
+                                      ? 'REJECTED'
+                                      : 'PENDING'),
                             style: TextStyle(
-                              color: goldColor,
+                              color: _verificationStatus == 'verified'
+                                  ? goldColor
+                                  : (_verificationStatus == 'rejected'
+                                        ? Colors.red
+                                        : Colors.orange),
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                               letterSpacing: 0.5,
@@ -865,11 +922,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           _buildStatsSection(goldColor, themeProvider),
           const SizedBox(height: 24),
 
-          // Ongoing Job
-          if (_ongoingBooking != null) ...[
-            _buildOngoingJobCard(goldColor, themeProvider),
-            const SizedBox(height: 24),
-          ],
+          // Ongoing Job - REMOVED per user request
+          // if (_ongoingBooking != null) ...[
+          //   _buildOngoingJobCard(goldColor, themeProvider),
+          //   const SizedBox(height: 24),
+          // ],
 
           // Extra bottom padding for scrolling
           const SizedBox(height: 100),
@@ -977,10 +1034,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '₱ 12,450.00', // Mock data
+                  '$_currency ${_walletBalance.toStringAsFixed(2)}',
                   style: TextStyle(
                     color: goldColor,
-                    fontSize: 24,
+                    fontSize: 32,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -1012,95 +1069,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   // _buildStatusCard removed
-
-  Widget _buildOngoingJobCard(Color goldColor, ThemeProvider themeProvider) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => JobProgressScreen(
-              booking: _ongoingBooking!,
-              token: widget.userData['token'],
-            ),
-          ),
-        ).then((result) {
-          if (result == 'switch_to_sessions') {
-            setState(() => _selectedIndex = 3);
-          }
-          _checkOngoingJob();
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.green.shade800.withOpacity(0.9),
-              Colors.green.shade600.withOpacity(0.9),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.green.withOpacity(0.3),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.spa_rounded,
-                color: Colors.white,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'ONGOING JOB',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _ongoingBooking!['service']['name'],
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   void _showLuxuryDialog(
     String message, {

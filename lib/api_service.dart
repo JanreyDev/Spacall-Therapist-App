@@ -109,7 +109,8 @@ class ApiService {
           echoClient.handleEvent(event);
         },
         onAuthorizer: (channelName, socketId, options) async {
-          final authUrl = '${baseUrl.replaceAll('/api', '')}/broadcasting/auth';
+          final authUrl =
+              '${baseUrl.replaceFirst(RegExp(r'/api$'), '')}/broadcasting/auth';
           final response = await http.post(
             Uri.parse(authUrl),
             headers: {

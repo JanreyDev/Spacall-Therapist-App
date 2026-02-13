@@ -531,8 +531,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         Placemark place = placemarks[0];
         if (mounted) {
           setState(() {
-            _currentAddress =
-                "${place.street}, ${place.locality}, ${place.administrativeArea}";
+            String name = place.name ?? "";
+            String street = place.street ?? "";
+            String locality = place.locality ?? "";
+
+            if (street.isNotEmpty && street != name) {
+              _currentAddress = "$street, $locality";
+            } else if (name.isNotEmpty) {
+              _currentAddress = "$name, $locality";
+            } else {
+              _currentAddress = locality;
+            }
+
+            if (_currentAddress.isEmpty) _currentAddress = "Tarlac City, PH";
           });
         }
       }

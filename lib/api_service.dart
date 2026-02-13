@@ -209,6 +209,10 @@ class ApiService {
     required dynamic idCardBackPhoto,
     required dynamic idSelfiePhoto,
     String role = 'therapist',
+    String? customerTier,
+    String? storeName,
+    double? latitude,
+    double? longitude,
   }) async {
     try {
       var request = http.MultipartRequest(
@@ -224,6 +228,19 @@ class ApiService {
       request.fields['date_of_birth'] = dob;
       request.fields['pin'] = pin;
       request.fields['role'] = role;
+
+      if (customerTier != null) {
+        request.fields['customer_tier'] = customerTier;
+      }
+      if (storeName != null) {
+        request.fields['store_name'] = storeName;
+      }
+      if (latitude != null) {
+        request.fields['latitude'] = latitude.toString();
+      }
+      if (longitude != null) {
+        request.fields['longitude'] = longitude.toString();
+      }
 
       // Helper to add file
       Future<void> addFile(String field, dynamic file) async {
@@ -304,11 +321,20 @@ class ApiService {
     required String token,
     double? latitude,
     double? longitude,
+    String? bookingType,
   }) async {
     try {
       String url = '$baseUrl/therapist/nearby-bookings';
+      List<String> params = [];
       if (latitude != null && longitude != null) {
-        url += '?latitude=$latitude&longitude=$longitude';
+        params.add('latitude=$latitude');
+        params.add('longitude=$longitude');
+      }
+      if (bookingType != null) {
+        params.add('booking_type=$bookingType');
+      }
+      if (params.isNotEmpty) {
+        url += '?${params.join('&')}';
       }
       print('Calling API: GET $url');
       final response = await http.get(
@@ -332,9 +358,13 @@ class ApiService {
 
   Future<Map<String, dynamic>> getActiveRequests({
     required String token,
+    String? bookingType,
   }) async {
     try {
-      final url = '$baseUrl/therapist/active-requests';
+      String url = '$baseUrl/therapist/active-requests';
+      if (bookingType != null) {
+        url += '?booking_type=$bookingType';
+      }
       final response = await http.get(
         Uri.parse(url),
         headers: {

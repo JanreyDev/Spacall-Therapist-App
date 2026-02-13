@@ -4,18 +4,28 @@ import '../theme_provider.dart';
 import 'active_requests_screen.dart';
 import 'nearby_bookings_screen.dart';
 
+import 'store_requests_screen.dart';
+
 class ConsolidatedRequestsScreen extends StatelessWidget {
   final String token;
+  final Map<String, dynamic> userData;
 
-  const ConsolidatedRequestsScreen({super.key, required this.token});
+  const ConsolidatedRequestsScreen({
+    super.key,
+    required this.token,
+    required this.userData,
+  });
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final goldColor = themeProvider.goldColor;
 
+    final bool isStore = userData['user']?['customer_tier'] == 'store';
+    final int tabCount = isStore ? 3 : 2;
+
     return DefaultTabController(
-      length: 2,
+      length: tabCount,
       child: Scaffold(
         backgroundColor: themeProvider.backgroundColor,
         appBar: AppBar(
@@ -34,19 +44,26 @@ class ConsolidatedRequestsScreen extends StatelessWidget {
             labelColor: goldColor,
             unselectedLabelColor: Colors.white54,
             indicatorWeight: 3,
-            tabs: const [
-              Tab(
+            tabs: [
+              const Tab(
                 child: Text(
                   'NEARBY',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
-              Tab(
+              const Tab(
                 child: Text(
                   'DIRECT',
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
+              if (isStore)
+                const Tab(
+                  child: Text(
+                    'STORE',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
             ],
           ),
         ),
@@ -54,6 +71,7 @@ class ConsolidatedRequestsScreen extends StatelessWidget {
           children: [
             NearbyBookingsScreen(token: token, isTab: true),
             ActiveRequestsScreen(token: token, isTab: true),
+            if (isStore) StoreRequestsScreen(token: token, isTab: true),
           ],
         ),
       ),

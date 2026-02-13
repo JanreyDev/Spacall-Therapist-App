@@ -26,6 +26,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   late String _currentStatus;
   bool _isLoading = false;
   Timer? _locationTimer;
+  late bool _isStoreBooking;
 
   late LatLng _clientLocation;
 
@@ -33,6 +34,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   void initState() {
     super.initState();
     _currentStatus = widget.booking['status'];
+    _isStoreBooking = widget.booking['booking_type'] == 'in_store';
     final loc = widget.booking['location'];
 
     if (loc != null && loc['latitude'] != null && loc['longitude'] != null) {
@@ -46,7 +48,9 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
       debugPrint('Warning: Booking location data is missing!');
     }
 
-    _startTracking();
+    if (!_isStoreBooking) {
+      _startTracking();
+    }
     _fetchLatestStatus();
   }
 
@@ -149,7 +153,10 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     const goldColor = Color(0xFFD4AF37);
 
     // If en_route, show Map. Otherwise (arrived, in_progress), show details.
-    bool showMap = _currentStatus == 'en_route' || _currentStatus == 'accepted';
+    // ALWAYS hide map for store bookings
+    bool showMap =
+        !_isStoreBooking &&
+        (_currentStatus == 'en_route' || _currentStatus == 'accepted');
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -372,6 +379,12 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
             'Service',
             service['name'] ?? 'Luxury Treatment',
           ),
+          if (widget.booking['scheduled_at'] != null)
+            _buildDetailItem(
+              Icons.calendar_today,
+              'Scheduled',
+              _formatDate(widget.booking['scheduled_at']),
+            ),
           _buildDetailItem(
             Icons.payments,
             'Amount Due',
@@ -412,6 +425,16 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         ],
       ),
     );
+  }
+
+  String _formatDate(dynamic date) {
+    if (date == null) return 'N/A';
+    try {
+      DateTime dt = DateTime.parse(date.toString());
+      return "${dt.day}/${dt.month}/${dt.year} at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+    } catch (e) {
+      return date.toString();
+    }
   }
 
   String _getFriendlyStatus() {
@@ -521,8 +544,13 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
 
     switch (_currentStatus) {
       case 'accepted':
-        text = 'START TRIP';
-        nextStatus = 'en_route';
+        if (_isStoreBooking) {
+          text = 'START SESSION';
+          nextStatus = 'in_progress';
+        } else {
+          text = 'START TRIP';
+          nextStatus = 'en_route';
+        }
         break;
       case 'en_route':
         text = 'I HAVE ARRIVED';

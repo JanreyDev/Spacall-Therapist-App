@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'welcome_screen.dart';
 import 'spacall_camera_screen.dart';
+import 'package:geolocator/geolocator.dart';
 import '../api_service.dart';
 
 class RegistrationScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
   final _lastNameController = TextEditingController();
   final _pinController = TextEditingController();
   final _confirmPinController = TextEditingController();
+  final _storeNameController = TextEditingController();
   final _apiService = ApiService();
 
   late AnimationController _animationController;
@@ -29,6 +31,9 @@ class _RegistrationScreenState extends State<RegistrationScreen>
   late Animation<Offset> _slideAnimation;
 
   String _gender = 'male';
+  String _subscriptionTier = 'classic';
+  double? _latitude;
+  double? _longitude;
   DateTime _dob = DateTime.now().subtract(const Duration(days: 365 * 18));
   bool _isLoading = false;
 
@@ -184,6 +189,12 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         idCardBackPhoto: _idCardBackPhoto,
         idSelfiePhoto: _idSelfiePhoto,
         role: 'therapist',
+        customerTier: _subscriptionTier,
+        storeName: _subscriptionTier == 'store'
+            ? _storeNameController.text.trim()
+            : null,
+        latitude: _latitude,
+        longitude: _longitude,
       );
 
       if (!mounted) return;
@@ -262,6 +273,16 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                   _buildProfessionalDropdown(),
                   const Divider(color: Colors.white10),
                   _buildProfessionalDatePicker(),
+                  const Divider(color: Colors.white10),
+                  _buildProfessionalTierSelector(),
+                  if (_subscriptionTier == 'store') ...[
+                    const Divider(color: Colors.white10),
+                    _buildProfessionalTextField(
+                      controller: _storeNameController,
+                      label: 'Store / Business Name',
+                      icon: Icons.storefront_outlined,
+                    ),
+                  ],
                 ]),
 
                 const SizedBox(height: 24),
@@ -474,6 +495,72 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildProfessionalTierSelector() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Row(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Icon(
+              Icons.star_outline_rounded,
+              color: _goldPrimary.withOpacity(0.5),
+              size: 20,
+            ),
+          ),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _subscriptionTier,
+                dropdownColor: _cardBg,
+                icon: const Icon(
+                  Icons.keyboard_arrow_down,
+                  color: Colors.white24,
+                  size: 20,
+                ),
+                isExpanded: true,
+                style: const TextStyle(color: _textPrimary, fontSize: 15),
+                items:
+                    [
+                      {'value': 'classic', 'label': 'Classic Tier'},
+                      {'value': 'store', 'label': 'Store Tier'},
+                    ].map((tier) {
+                      return DropdownMenuItem<String>(
+                        value: tier['value'],
+                        child: Text(tier['label']!),
+                      );
+                    }).toList(),
+                onChanged: (val) {
+                  setState(() => _subscriptionTier = val!);
+                  if (val == 'store') {
+                    _getCurrentLocation();
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _getCurrentLocation() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      if (mounted) {
+        setState(() {
+          _latitude = position.latitude;
+          _longitude = position.longitude;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching location: $e");
+    }
   }
 
   Widget _buildImagePickerSection() {

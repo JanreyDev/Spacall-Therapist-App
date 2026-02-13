@@ -32,7 +32,10 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final response = await _apiService.getNearbyBookings(token: widget.token);
+      final response = await _apiService.getNearbyBookings(
+        token: widget.token,
+        bookingType: 'home_service',
+      );
       if (!mounted) return;
       setState(() {
         _bookings = response['bookings'];

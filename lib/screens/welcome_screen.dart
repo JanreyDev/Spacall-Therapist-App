@@ -28,6 +28,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   String _currentAddress = 'Not set';
   int _directRequestCount = 0;
   int _nearbyRequestCount = 0;
+  int _storeRequestCount = 0;
   Map<String, dynamic>? _ongoingBooking;
   Timer? _pollingTimer;
   int _selectedIndex = 0;
@@ -38,7 +39,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   String _verificationStatus = 'pending'; // pending, verified, rejected
   String _currency = 'PHP';
 
-  int get _totalRequestCount => _directRequestCount + _nearbyRequestCount;
+  int get _totalRequestCount =>
+      _directRequestCount + _nearbyRequestCount + _storeRequestCount;
 
   @override
   void initState() {
@@ -58,12 +60,18 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     _checkActiveRequests();
     _checkOngoingJob();
     _checkNearbyBookings();
+    if (widget.userData['user']?['customer_tier'] == 'store') {
+      _checkStoreRequests();
+    }
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (_isOnline) {
         _fetchProfile();
         _checkActiveRequests();
         _checkOngoingJob();
         _checkNearbyBookings();
+        if (widget.userData['user']?['customer_tier'] == 'store') {
+          _checkStoreRequests();
+        }
         _updateLiveLocation();
       }
     });
@@ -110,14 +118,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     try {
       final response = await _apiService.getActiveRequests(
         token: widget.userData['token'],
+        bookingType: 'home_service',
       );
       final List<dynamic> requests = response['bookings'] ?? [];
 
       if (requests.isNotEmpty) {
-        // Sort by created_at desc to get latest
-        // (Assuming API returns sorted, but good to be safe if we rely on "latest")
-        // actually API sorts by created_at desc.
-
         final latestBooking = requests.first;
         final latestId = latestBooking['id'];
 
@@ -136,6 +141,24 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       }
     } catch (e) {
       print('Polling error: $e');
+    }
+  }
+
+  Future<void> _checkStoreRequests() async {
+    try {
+      final response = await _apiService.getActiveRequests(
+        token: widget.userData['token'],
+        bookingType: 'in_store',
+      );
+      final List<dynamic> requests = response['bookings'] ?? [];
+
+      if (mounted) {
+        setState(() {
+          _storeRequestCount = requests.length;
+        });
+      }
+    } catch (e) {
+      print('Polling error (Store): $e');
     }
   }
 
@@ -216,6 +239,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final goldColor = themeProvider.goldColor;
     final customer = booking['customer'];
     final service = booking['service'];
+    final userTier = widget.userData['user']?['customer_tier'] ?? 'classic';
+    final isStoreTier = userTier == 'store';
 
     showDialog(
       context: context,
@@ -226,7 +251,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             : Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(28),
-          side: BorderSide(color: goldColor.withOpacity(0.3), width: 1),
+          side: BorderSide(
+            color: isStoreTier ? goldColor : goldColor.withOpacity(0.3),
+            width: isStoreTier ? 2 : 1,
+          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -247,7 +275,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    goldColor.withOpacity(0.15),
+                    goldColor.withOpacity(isStoreTier ? 0.3 : 0.15),
                     goldColor.withOpacity(0.05),
                   ],
                   begin: Alignment.topCenter,
@@ -266,7 +294,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      Icons.notifications_active,
+                      isStoreTier
+                          ? Icons.storefront_outlined
+                          : Icons.notifications_active,
                       color: goldColor,
                       size: 32,
                     ),
@@ -286,7 +316,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       ),
                     ),
                     child: Text(
-                      isDirect ? 'DIRECT REQUEST' : 'NEW NEARBY JOB',
+                      isStoreTier
+                          ? 'NEW STORE APPOINTMENT'
+                          : (isDirect ? 'DIRECT REQUEST' : 'NEW NEARBY JOB'),
                       style: TextStyle(
                         color: goldColor,
                         fontSize: 12,
@@ -643,7 +675,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         index: _selectedIndex,
         children: [
           _buildDashboard(themeProvider),
-          ConsolidatedRequestsScreen(token: widget.userData['token']),
+          ConsolidatedRequestsScreen(
+            token: widget.userData['token'],
+            userData: widget.userData,
+          ),
           BookingHistoryScreen(
             token: widget.userData['token'],
             showAppBar: false,
@@ -742,23 +777,55 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Location
               Expanded(
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.location_on, color: goldColor, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _currentAddress,
-                        style: TextStyle(
-                          color: themeProvider.subtextColor,
-                          fontSize: 13,
+                    Row(
+                      children: [
+                        Icon(Icons.location_on, color: goldColor, size: 16),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            _currentAddress,
+                            style: TextStyle(
+                              color: textColor.withOpacity(0.7),
+                              fontSize: 14,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      ],
                     ),
+                    if (user?['customer_tier'] == 'store')
+                      Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: goldColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: goldColor.withOpacity(0.5)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.storefront, color: goldColor, size: 14),
+                            const SizedBox(width: 6),
+                            Text(
+                              "STORE TIER",
+                              style: TextStyle(
+                                color: goldColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                   ],
                 ),
               ),

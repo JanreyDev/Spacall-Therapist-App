@@ -3,21 +3,21 @@ import '../api_service.dart';
 import '../widgets/luxury_success_modal.dart';
 import 'job_progress_screen.dart';
 
-class ActiveRequestsScreen extends StatefulWidget {
+class StoreRequestsScreen extends StatefulWidget {
   final String token;
   final bool isTab;
 
-  const ActiveRequestsScreen({
+  const StoreRequestsScreen({
     super.key,
     required this.token,
     this.isTab = false,
   });
 
   @override
-  State<ActiveRequestsScreen> createState() => _ActiveRequestsScreenState();
+  State<StoreRequestsScreen> createState() => _StoreRequestsScreenState();
 }
 
-class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
+class _StoreRequestsScreenState extends State<StoreRequestsScreen> {
   final _apiService = ApiService();
   List<dynamic> _requests = [];
   bool _isLoading = true;
@@ -34,7 +34,7 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
     try {
       final response = await _apiService.getActiveRequests(
         token: widget.token,
-        bookingType: 'home_service',
+        bookingType: 'in_store',
       );
       if (!mounted) return;
       setState(() {
@@ -67,18 +67,16 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
       if (!mounted) return;
 
       if (status == 'accepted') {
-        debugPrint('Booking accepted, showing modal...');
         showDialog(
           context: context,
           barrierDismissible: false,
           builder: (dialogContext) => LuxurySuccessModal(
             title: 'SUCCESS',
-            message: 'Booking ACCEPTED! You can now start your journey.',
+            message: 'Appointment CONFIRMED! Client is expecting you.',
             onConfirm: () {
-              debugPrint('Continuing to map...');
-              Navigator.of(dialogContext).pop(); // Close modal
+              Navigator.of(dialogContext).pop();
               Navigator.push(
-                context, // Use screen context
+                context,
                 MaterialPageRoute(
                   builder: (context) => JobProgressScreen(
                     booking: response['booking'],
@@ -99,10 +97,10 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
           context: context,
           builder: (dialogContext) => LuxurySuccessModal(
             title: 'SUCCESS',
-            message: 'Booking ${status.toUpperCase()}!',
+            message: 'Appointment ${status.toUpperCase()}!',
             onConfirm: () {
               Navigator.of(dialogContext).pop();
-              _fetchRequests(); // Refresh list
+              _fetchRequests();
             },
           ),
         );
@@ -121,6 +119,16 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
     }
   }
 
+  String _formatDate(dynamic date) {
+    if (date == null) return 'N/A';
+    try {
+      DateTime dt = DateTime.parse(date.toString());
+      return "${dt.day}/${dt.month}/${dt.year} at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+    } catch (e) {
+      return date.toString();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final content = _isLoading
@@ -131,13 +139,13 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  Icons.notifications_none_rounded,
+                  Icons.storefront_outlined,
                   size: 64,
                   color: Colors.grey.withOpacity(0.5),
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'No new direct requests',
+                  'No store appointments',
                   style: TextStyle(color: Colors.grey),
                 ),
               ],
@@ -180,7 +188,7 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Text(
-                              'VIP DIRECT',
+                              'STORE APPOINTMENT',
                               style: TextStyle(
                                 color: Color(0xFFD4AF37),
                                 fontSize: 10,
@@ -247,6 +255,27 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
                           ),
                         ],
                       ),
+                      if (booking['scheduled_at'] != null) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.calendar_today_outlined,
+                              size: 16,
+                              color: Color(0xFFD4AF37),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              "Scheduled: ${_formatDate(booking['scheduled_at'])}",
+                              style: const TextStyle(
+                                color: Color(0xFFD4AF37),
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 20),
                       Row(
                         children: [
@@ -315,7 +344,7 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Direct Requests'),
+        title: const Text('Store Appointments'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),

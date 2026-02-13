@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../api_service.dart';
 import '../theme_provider.dart';
 import 'consolidated_requests_screen.dart';
+import 'package:intl/intl.dart';
 
 import 'dart:async';
 import 'package:geolocator/geolocator.dart';
@@ -23,7 +24,7 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
   final ApiService _apiService = ApiService();
-  bool _isOnline = false;
+  bool _isOnline = true;
   bool _isUpdating = false;
   String _currentAddress = 'Not set';
   int _directRequestCount = 0;
@@ -63,6 +64,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     if (widget.userData['user']?['customer_tier'] == 'store') {
       _checkStoreRequests();
     }
+    // Auto-online on login
+    _toggleOnline(true);
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (_isOnline) {
         _fetchProfile();
@@ -239,8 +242,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final goldColor = themeProvider.goldColor;
     final customer = booking['customer'];
     final service = booking['service'];
-    final userTier = widget.userData['user']?['customer_tier'] ?? 'classic';
-    final isStoreTier = userTier == 'store';
+    final bookingType = booking['booking_type'] ?? 'home_service';
+    final isStore = bookingType == 'in_store';
+
+    String label = isDirect
+        ? 'SOMEONE REQUESTED YOU'
+        : 'NEW NEARBY OPPORTUNITY';
+    IconData icon = isDirect
+        ? Icons.person_pin_outlined
+        : Icons.explore_outlined;
+
+    if (isStore) {
+      label = 'NEW STORE APPOINTMENT';
+      icon = Icons.storefront_outlined;
+    }
 
     showDialog(
       context: context,
@@ -252,8 +267,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(28),
           side: BorderSide(
-            color: isStoreTier ? goldColor : goldColor.withOpacity(0.3),
-            width: isStoreTier ? 2 : 1,
+            color: isStore ? goldColor : goldColor.withOpacity(0.3),
+            width: isStore ? 2 : 1,
           ),
         ),
         child: Column(
@@ -275,7 +290,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    goldColor.withOpacity(isStoreTier ? 0.3 : 0.15),
+                    goldColor.withOpacity(isStore ? 0.3 : 0.15),
                     goldColor.withOpacity(0.05),
                   ],
                   begin: Alignment.topCenter,
@@ -293,13 +308,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       color: goldColor.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
-                      isStoreTier
-                          ? Icons.storefront_outlined
-                          : Icons.notifications_active,
-                      color: goldColor,
-                      size: 32,
-                    ),
+                    child: Icon(icon, color: goldColor, size: 32),
                   ),
                   const SizedBox(height: 16),
                   Container(
@@ -316,9 +325,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                       ),
                     ),
                     child: Text(
-                      isStoreTier
-                          ? 'NEW STORE APPOINTMENT'
-                          : (isDirect ? 'DIRECT REQUEST' : 'NEW NEARBY JOB'),
+                      label,
                       style: TextStyle(
                         color: goldColor,
                         fontSize: 12,
@@ -678,6 +685,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           ConsolidatedRequestsScreen(
             token: widget.userData['token'],
             userData: widget.userData,
+            onTabSwitch: (index) {
+              setState(() => _selectedIndex = index);
+            },
           ),
           BookingHistoryScreen(
             token: widget.userData['token'],
@@ -1112,7 +1122,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '$_currency ${_walletBalance.toStringAsFixed(2)}',
+                  '$_currency ${NumberFormat('#,##0', 'en_US').format(_walletBalance)}',
                   style: TextStyle(
                     color: goldColor,
                     fontSize: 32,

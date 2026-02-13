@@ -6,11 +6,13 @@ import 'job_progress_screen.dart';
 class StoreRequestsScreen extends StatefulWidget {
   final String token;
   final bool isTab;
+  final Function(int)? onTabSwitch;
 
   const StoreRequestsScreen({
     super.key,
     required this.token,
     this.isTab = false,
+    this.onTabSwitch,
   });
 
   @override
@@ -85,7 +87,11 @@ class _StoreRequestsScreenState extends State<StoreRequestsScreen> {
                 ),
               ).then((result) {
                 if (result == 'switch_to_sessions') {
-                  Navigator.pop(context, 'switch_to_sessions');
+                  if (widget.isTab && widget.onTabSwitch != null) {
+                    widget.onTabSwitch!(0); // Redirect to Home as requested
+                  } else {
+                    Navigator.pop(context, 'switch_to_sessions');
+                  }
                 }
                 _fetchRequests();
               });

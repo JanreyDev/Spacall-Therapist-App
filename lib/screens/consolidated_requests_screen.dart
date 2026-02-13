@@ -9,11 +9,13 @@ import 'store_requests_screen.dart';
 class ConsolidatedRequestsScreen extends StatelessWidget {
   final String token;
   final Map<String, dynamic> userData;
+  final Function(int) onTabSwitch;
 
   const ConsolidatedRequestsScreen({
     super.key,
     required this.token,
     required this.userData,
+    required this.onTabSwitch,
   });
 
   @override
@@ -69,9 +71,22 @@ class ConsolidatedRequestsScreen extends StatelessWidget {
         ),
         body: TabBarView(
           children: [
-            NearbyBookingsScreen(token: token, isTab: true),
-            ActiveRequestsScreen(token: token, isTab: true),
-            if (isStore) StoreRequestsScreen(token: token, isTab: true),
+            NearbyBookingsScreen(
+              token: token,
+              isTab: true,
+              onTabSwitch: onTabSwitch,
+            ),
+            ActiveRequestsScreen(
+              token: token,
+              isTab: true,
+              onTabSwitch: onTabSwitch,
+            ),
+            if (isStore)
+              StoreRequestsScreen(
+                token: token,
+                isTab: true,
+                onTabSwitch: onTabSwitch,
+              ),
           ],
         ),
       ),

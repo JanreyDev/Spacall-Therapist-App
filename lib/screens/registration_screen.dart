@@ -147,9 +147,9 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       preferredCameraDevice: type == 'profile'
           ? CameraDevice.front
           : CameraDevice.rear,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      imageQuality: 50,
+      maxWidth: 600,
+      maxHeight: 600,
+      imageQuality: 25,
     );
     if (image != null) {
       setState(() {
@@ -177,6 +177,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     setState(() => _isLoading = true);
 
     try {
+      // 1. Initial Registration (Text Only)
       final response = await _apiService.registerProfile(
         mobileNumber: widget.mobileNumber,
         firstName: _firstNameController.text.trim(),
@@ -184,10 +185,10 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         gender: _gender,
         dob: _dob.toIso8601String().split('T')[0],
         pin: _pinController.text.trim(),
-        profilePhoto: _profilePhoto,
-        idCardPhoto: _idCardPhoto,
-        idCardBackPhoto: _idCardBackPhoto,
-        idSelfiePhoto: _idSelfiePhoto,
+        profilePhoto: null, // Don't send images here
+        idCardPhoto: null,
+        idCardBackPhoto: null,
+        idSelfiePhoto: null,
         role: 'therapist',
         customerTier: _subscriptionTier,
         storeName: _subscriptionTier == 'store'
@@ -196,6 +197,27 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         latitude: _latitude,
         longitude: _longitude,
       );
+
+      final token = response['token'];
+      if (token == null) throw Exception('No token returned');
+
+      // 2. Sequential Image Uploads
+      final uploads = {
+        'profile_photo': _profilePhoto,
+        'id_card_photo': _idCardPhoto,
+        'id_card_back_photo': _idCardBackPhoto,
+        'id_selfie_photo': _idSelfiePhoto,
+      };
+
+      for (var entry in uploads.entries) {
+        if (entry.value != null) {
+          await _apiService.uploadProfileImage(
+            token: token,
+            type: entry.key,
+            imageFile: entry.value,
+          );
+        }
+      }
 
       if (!mounted) return;
       _showLuxuryDialog('Registration Successful!');
@@ -313,8 +335,24 @@ class _RegistrationScreenState extends State<RegistrationScreen>
 
                 const SizedBox(height: 48),
                 _isLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(color: _goldPrimary),
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: const [
+                            CircularProgressIndicator(color: _goldPrimary),
+                            SizedBox(height: 16),
+                            Text(
+                              "Registering... Please wait.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: _goldPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                       )
                     : _buildSubmitButton(),
                 const SizedBox(height: 40),

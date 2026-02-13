@@ -269,18 +269,69 @@ class ApiService {
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        try {
+          return jsonDecode(response.body);
+        } catch (e) {
+          throw Exception('Failed to parse response: ${response.body}');
+        }
       } else {
-        final error = jsonDecode(response.body);
-        throw Exception(
-          error['message'] ??
+        String errorMessage = 'Registration failed (${response.statusCode})';
+        try {
+          final error = jsonDecode(response.body);
+          errorMessage =
+              error['message'] ??
               error['errors']?.toString() ??
-              'Registration failed',
-        );
+              'Registration failed';
+        } catch (_) {
+          if (response.body.isNotEmpty) {
+            errorMessage = 'Server Error: ${response.body}';
+          }
+        }
+        throw Exception(errorMessage);
       }
     } catch (e) {
       throw Exception('Registration Error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> uploadProfileImage({
+    required String token,
+    required String type,
+    required dynamic imageFile,
+  }) async {
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/auth/upload-photo'),
+      );
+
+      request.headers['Authorization'] = 'Bearer $token';
+      request.headers['Accept'] = 'application/json';
+      request.fields['type'] = type;
+
+      if (imageFile is String) {
+        request.files.add(
+          await http.MultipartFile.fromPath('image', imageFile),
+        );
+      } else {
+        request.files.add(
+          await http.MultipartFile.fromPath('image', imageFile.path),
+        );
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(
+          'Upload failed (${response.statusCode}): ${response.body}',
+        );
+      }
+    } catch (e) {
+      throw Exception('Image Upload Error: $e');
     }
   }
 

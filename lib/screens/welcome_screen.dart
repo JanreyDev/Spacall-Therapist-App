@@ -44,6 +44,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   int _sessions = 0;
   String _rating = '5.0';
   double _earningsToday = 0.0;
+  // Store specific
+  int _activeTherapists = 0;
 
   int get _totalRequestCount =>
       _directRequestCount + _nearbyRequestCount + _storeRequestCount;
@@ -133,6 +135,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         setState(() {
           _sessions = stats['sessions'] ?? 0;
           _rating = stats['rating']?.toString() ?? '5.0';
+          _activeTherapists = stats['active_therapists'] ?? 0;
           _earningsToday =
               double.tryParse(stats['earnings_today']?.toString() ?? '0') ??
               0.0;
@@ -796,6 +799,244 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Widget _buildDashboard(ThemeProvider themeProvider) {
+    if (widget.userData['user']?['customer_tier'] == 'store') {
+      return _buildStoreDashboard(themeProvider);
+    }
+    return _buildTherapistDashboard(themeProvider);
+  }
+
+  Widget _buildStoreDashboard(ThemeProvider themeProvider) {
+    final user = widget.userData['user'];
+    final goldColor = themeProvider.goldColor;
+    final textColor = themeProvider.textColor;
+    final name = user != null ? "${user['first_name']}" : "Store";
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Store Header with Gradient/Card look
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [goldColor.withOpacity(0.2), const Color(0xFF1E1E1E)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: goldColor.withOpacity(0.3)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name.toUpperCase(),
+                      style: TextStyle(
+                        color: goldColor,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.storefront,
+                          color: textColor.withOpacity(0.7),
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _currentAddress,
+                          style: TextStyle(
+                            color: textColor.withOpacity(0.7),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: goldColor, width: 2),
+                  ),
+                  child: CircleAvatar(
+                    radius: 28,
+                    backgroundColor: goldColor.withOpacity(0.1),
+                    backgroundImage: user?['profile_photo_url'] != null
+                        ? NetworkImage(
+                            ApiService.normalizePhotoUrl(
+                              user!['profile_photo_url'],
+                            )!,
+                          )
+                        : null,
+                    child: user?['profile_photo_url'] == null
+                        ? Icon(Icons.store, color: goldColor, size: 28)
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // Wallet Section
+          Text(
+            "Overview",
+            style: TextStyle(
+              color: textColor,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildWalletSection(goldColor, themeProvider),
+
+          const SizedBox(height: 24),
+
+          // Store Stats Grid
+          Text(
+            "Performance",
+            style: TextStyle(
+              color: textColor,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          GridView.count(
+            physics: const NeverScrollableScrollPhysics(),
+            shrinkWrap: true,
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 1.5,
+            children: [
+              _buildStatCard(
+                title: 'Total Bookings',
+                value: '$_sessions',
+                icon: Icons.calendar_today_outlined,
+                goldColor: goldColor,
+                themeProvider: themeProvider,
+              ),
+              _buildStatCard(
+                title: 'Active Therapists',
+                value: '$_activeTherapists',
+                icon: Icons.people_outline,
+                goldColor: goldColor,
+                themeProvider: themeProvider,
+              ),
+              _buildStatCard(
+                title: 'Store Earnings',
+                value: '₱${NumberFormat.compact().format(_earningsToday)}',
+                icon: Icons.monetization_on_outlined,
+                goldColor: goldColor,
+                themeProvider: themeProvider,
+              ),
+              // Placeholder for 4th card to balance grid
+              _buildStatCard(
+                title: 'Store Rating',
+                value: '$_rating',
+                icon: Icons.star_border,
+                goldColor: goldColor,
+                themeProvider: themeProvider,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 32),
+
+          // Store Controls
+          Text(
+            "Management",
+            style: TextStyle(
+              color: textColor,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _isOnline
+                            ? Colors.green.withOpacity(0.1)
+                            : Colors.grey.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.power_settings_new,
+                        color: _isOnline ? Colors.green : Colors.grey,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Store Status',
+                          style: TextStyle(
+                            color: textColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _isOnline ? 'Open for Business' : 'Closed',
+                          style: TextStyle(
+                            color: themeProvider.subtextColor,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Transform.scale(
+                  scale: 0.8,
+                  child: Switch.adaptive(
+                    value: _isOnline,
+                    onChanged: _isUpdating ? null : _toggleOnline,
+                    activeColor: goldColor,
+                    activeTrackColor: goldColor.withOpacity(0.3),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTherapistDashboard(ThemeProvider themeProvider) {
     final user = widget.userData['user'];
     final goldColor = themeProvider.goldColor;
     final textColor = themeProvider.textColor;

@@ -272,65 +272,41 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: goldColor,
-                        boxShadow: [
-                          BoxShadow(
-                            color: goldColor.withOpacity(0.3),
-                            blurRadius: 15,
-                            spreadRadius: 5,
-                          ),
-                        ],
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: goldColor,
+                    boxShadow: [
+                      BoxShadow(
+                        color: goldColor.withOpacity(0.3),
+                        blurRadius: 15,
+                        spreadRadius: 5,
                       ),
-                    ),
-                    CircleAvatar(
-                      radius: 46,
-                      backgroundColor: Colors.black,
-                      child: Icon(Icons.person, size: 50, color: goldColor),
-                    ),
-                    // Overlapping accent profile (Client)
-                    Positioned(
-                      top: 0,
-                      right: -10,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Colors.grey[800],
-                          backgroundImage: customer['profile_photo_url'] != null
-                              ? NetworkImage(
-                                  ApiService.normalizePhotoUrl(
-                                    customer['profile_photo_url'],
-                                  )!,
-                                )
-                              : null,
-                          child: customer['profile_photo_url'] == null
-                              ? const Icon(
-                                  Icons.person,
-                                  size: 18,
-                                  color: Colors.white,
-                                )
-                              : null,
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 50,
+                    backgroundColor: Colors.grey[900],
+                    backgroundImage: customer['profile_photo_url'] != null
+                        ? NetworkImage(
+                            ApiService.normalizePhotoUrl(
+                              customer['profile_photo_url'],
+                            )!,
+                          )
+                        : null,
+                    child: customer['profile_photo_url'] == null
+                        ? const Icon(
+                            Icons.person,
+                            size: 50,
+                            color: Colors.white54,
+                          )
+                        : null,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Client ${customer['first_name'] ?? 'Guest'} ${customer['last_name'] ?? ''}',
+                  '${customer['first_name'] ?? 'Guest'} ${customer['last_name'] ?? ''}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,

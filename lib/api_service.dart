@@ -407,6 +407,28 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getDashboardStats(String token) async {
+    try {
+      final url = '$baseUrl/therapist/dashboard-stats';
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to load dashboard stats');
+      }
+    } catch (e) {
+      throw Exception('Dashboard Stats Error: $e');
+    }
+  }
+
   Future<Map<String, dynamic>> getActiveRequests({
     required String token,
     String? bookingType,

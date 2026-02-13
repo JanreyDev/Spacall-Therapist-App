@@ -40,6 +40,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   String _verificationStatus = 'pending'; // pending, verified, rejected
   String _currency = 'PHP';
 
+  // Dashboard Stats
+  int _sessions = 0;
+  String _rating = '5.0';
+  double _earningsToday = 0.0;
+
   int get _totalRequestCount =>
       _directRequestCount + _nearbyRequestCount + _storeRequestCount;
 
@@ -61,6 +66,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     _checkActiveRequests();
     _checkOngoingJob();
     _checkNearbyBookings();
+    _fetchDashboardStats(); // Initial fetch
     if (widget.userData['user']?['customer_tier'] == 'store') {
       _checkStoreRequests();
     }
@@ -69,6 +75,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       if (_isOnline) {
         _fetchProfile();
+        _fetchDashboardStats(); // Periodic fetch
         _checkActiveRequests();
         _checkOngoingJob();
         _checkNearbyBookings();
@@ -114,6 +121,25 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       }
     } catch (e) {
       print('Error fetching profile: $e');
+    }
+  }
+
+  Future<void> _fetchDashboardStats() async {
+    try {
+      final stats = await _apiService.getDashboardStats(
+        widget.userData['token'],
+      );
+      if (mounted) {
+        setState(() {
+          _sessions = stats['sessions'] ?? 0;
+          _rating = stats['rating']?.toString() ?? '5.0';
+          _earningsToday =
+              double.tryParse(stats['earnings_today']?.toString() ?? '0') ??
+              0.0;
+        });
+      }
+    } catch (e) {
+      print('Error fetching stats: $e');
     }
   }
 
@@ -1029,7 +1055,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         Expanded(
           child: _buildStatCard(
             title: 'Sessions',
-            value: '12', // Mock data
+            value: '$_sessions',
             icon: Icons.spa_outlined,
             goldColor: goldColor,
             themeProvider: themeProvider,
@@ -1039,7 +1065,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         Expanded(
           child: _buildStatCard(
             title: 'Rating',
-            value: '4.9', // Mock data
+            value: _rating,
             icon: Icons.star_border_rounded,
             goldColor: goldColor,
             themeProvider: themeProvider,
@@ -1049,7 +1075,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         Expanded(
           child: _buildStatCard(
             title: 'Earnings',
-            value: '₱2.5k', // Mock data
+            value: '₱${NumberFormat('#,##0').format(_earningsToday)}',
             icon: Icons.account_balance_wallet_outlined,
             goldColor: goldColor,
             themeProvider: themeProvider,

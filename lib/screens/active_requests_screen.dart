@@ -213,6 +213,15 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Duration: ${service['duration_minutes'] ?? '60'} mins',
+                        style: TextStyle(
+                          color: const Color(0xFFD4AF37).withOpacity(0.8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(height: 12),
                       Row(
                         children: [

@@ -355,6 +355,11 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
             'Service',
             service['name'] ?? 'Luxury Treatment',
           ),
+          _buildDetailItem(
+            Icons.access_time,
+            'Duration',
+            '${service['duration_minutes'] ?? '60'} Minutes Session',
+          ),
           if (widget.booking['scheduled_at'] != null)
             _buildDetailItem(
               Icons.calendar_today,

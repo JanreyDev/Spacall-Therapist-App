@@ -48,7 +48,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   String _rating = '5.0';
   double _earningsToday = 0.0;
   // Store specific
-  int _activeTherapists = 0;
 
   int get _totalRequestCount =>
       _directRequestCount + _nearbyRequestCount + _storeRequestCount;
@@ -138,7 +137,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         setState(() {
           _sessions = stats['sessions'] ?? 0;
           _rating = stats['rating']?.toString() ?? '5.0';
-          _activeTherapists = stats['active_therapists'] ?? 0;
           _earningsToday =
               double.tryParse(stats['earnings_today']?.toString() ?? '0') ??
               0.0;

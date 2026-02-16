@@ -19,6 +19,7 @@ class _AccountScreenState extends State<AccountScreen> {
   // ignore: unused_field
   final ApiService _apiService = ApiService();
   bool _isProcessing = false;
+  bool _isUpgradePending = false;
 
   void _handleLogout(BuildContext context) {
     showDialog(
@@ -193,7 +194,6 @@ class _AccountScreenState extends State<AccountScreen> {
     final tier = (user['therapist_tier'] ?? 'standard')
         .toString()
         .toLowerCase();
-    final tierLabel = tier == 'vip' ? "VIP Therapist" : "Verified Therapist";
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -267,14 +267,40 @@ class _AccountScreenState extends State<AccountScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    Text(
-                      fullName,
-                      style: TextStyle(
-                        color: themeProvider.textColor,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          fullName,
+                          style: TextStyle(
+                            color: themeProvider.textColor,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          _isUpgradePending
+                              ? Icons.hourglass_empty
+                              : Icons.verified,
+                          color: goldColor,
+                          size: 22,
+                        ),
+                      ],
                     ),
+                    if (_isUpgradePending)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          "PENDING APPROVAL",
+                          style: TextStyle(
+                            color: goldColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 4),
                     Text(
                       email != 'No email provided' ? email : phone,
@@ -284,63 +310,95 @@ class _AccountScreenState extends State<AccountScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: tier == 'vip'
-                            ? null
-                            : goldColor.withOpacity(0.15),
-                        gradient: tier == 'vip'
-                            ? const LinearGradient(
-                                colors: [
-                                  Color(0xFFB8860B),
-                                  Color(0xFFD4AF37),
-                                  Color(0xFFFFD700),
-                                ],
-                              )
-                            : null,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: tier == 'vip'
-                              ? Colors.transparent
-                              : goldColor.withOpacity(0.5),
-                        ),
-                        boxShadow: tier == 'vip'
-                            ? [
-                                BoxShadow(
-                                  color: goldColor.withOpacity(0.3),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ]
-                            : null,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.verified,
-                            color: tier == 'vip' ? Colors.black : goldColor,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            tierLabel,
-                            style: TextStyle(
-                              color: tier == 'vip' ? Colors.black : goldColor,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
+
+              if (tier != 'vip' && !_isUpgradePending) ...[
+                const SizedBox(height: 32),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 16,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1E1E),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: goldColor.withOpacity(0.3)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: goldColor.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.star, color: goldColor, size: 22),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Upgrade to VIP",
+                                style: TextStyle(
+                                  color: goldColor,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                "Unlock premium features",
+                                style: TextStyle(
+                                  color: themeProvider.textColor.withOpacity(
+                                    0.5,
+                                  ),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () =>
+                              _showUpgradeForm(context, themeProvider),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: goldColor,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text(
+                            "APPLY",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 40),
 
@@ -526,6 +584,277 @@ class _AccountScreenState extends State<AccountScreen> {
               Icons.chevron_right,
               color: themeProvider.textColor.withOpacity(0.2),
               size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showUpgradeForm(BuildContext context, ThemeProvider themeProvider) {
+    final goldColor = const Color(0xFFEBC14F);
+    final expController = TextEditingController();
+    final skillsController = TextEditingController();
+    final bioController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: const BoxDecoration(
+          color: Color(0xFF121212),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(32),
+            topRight: Radius.circular(32),
+          ),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+              Text(
+                "VIP Application",
+                style: TextStyle(
+                  color: goldColor,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Please provide additional professional details for our verification team.",
+                style: TextStyle(
+                  color: themeProvider.textColor.withOpacity(0.6),
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 32),
+              _buildFormField(
+                "Years of Experience",
+                expController,
+                Icons.history,
+                goldColor,
+                themeProvider,
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 20),
+              _buildFormField(
+                "Specialized Skills",
+                skillsController,
+                Icons.auto_awesome_outlined,
+                goldColor,
+                themeProvider,
+                placeholder: "e.g., Deep Tissue, Stone Massage...",
+              ),
+              const SizedBox(height: 20),
+              _buildFormField(
+                "Professional Bio",
+                bioController,
+                Icons.description_outlined,
+                goldColor,
+                themeProvider,
+                maxLines: 4,
+                placeholder: "Tell us about your professional journey...",
+              ),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _submitUpgradeRequest(context, themeProvider);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: goldColor,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    "SUBMIT APPLICATION",
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormField(
+    String label,
+    TextEditingController controller,
+    IconData icon,
+    Color goldColor,
+    ThemeProvider themeProvider, {
+    int maxLines = 1,
+    String? placeholder,
+    TextInputType? keyboardType,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: themeProvider.textColor.withOpacity(0.8),
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          keyboardType: keyboardType,
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+          decoration: InputDecoration(
+            hintText: placeholder,
+            hintStyle: TextStyle(color: Colors.white.withOpacity(0.2)),
+            prefixIcon: Icon(icon, color: goldColor.withOpacity(0.5), size: 20),
+            filled: true,
+            fillColor: Colors.white.withOpacity(0.05),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: goldColor.withOpacity(0.5)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _submitUpgradeRequest(
+    BuildContext context,
+    ThemeProvider themeProvider,
+  ) {
+    final goldColor = const Color(0xFFEBC14F);
+
+    setState(() {
+      _isUpgradePending = true;
+    });
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: goldColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.hourglass_top_rounded,
+                color: goldColor,
+                size: 48,
+              ),
+            ),
+            const SizedBox(height: 32),
+            const Text(
+              "Application Received",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "Your VIP upgrade request has been submitted successfully.\n\nOur team will review your details and documents. This process usually takes 24-48 hours.",
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.6),
+                fontSize: 14,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: goldColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: goldColor.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.info_outline, color: goldColor, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    "STATUS: FOR APPROVAL",
+                    style: TextStyle(
+                      color: goldColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.white.withOpacity(0.05),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  "UNDERSTOOD",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             ),
           ],
         ),

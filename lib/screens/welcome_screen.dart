@@ -11,6 +11,9 @@ import 'package:geocoding/geocoding.dart';
 import 'job_progress_screen.dart';
 import 'booking_history_screen.dart';
 import 'account_screen.dart';
+import 'dart:ui';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'login_screen.dart';
 import '../widgets/luxury_success_modal.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -559,6 +562,43 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
   }
 
+  Future<void> _handleLogout() async {
+    try {
+      // Disconnect Echo & Polling
+      _apiService.disconnectEcho();
+      _pollingTimer?.cancel();
+
+      // Backend logout (silent failure ok)
+      try {
+        await _apiService.logout(widget.userData['token']);
+      } catch (e) {
+        print('Backend logout failed: $e');
+      }
+
+      // Clear local auth token
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('auth_token');
+
+      if (!mounted) return;
+
+      // Navigate back to LoginScreen
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      print('Logout sequence error: $e');
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    }
+  }
+
   Future<Position> _determinePosition() async {
     bool serviceEnabled;
     LocationPermission permission;
@@ -642,10 +682,24 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           await _getAddressFromLatLng(position);
         } catch (e) {
           if (!mounted) return;
-          _showLuxuryDialog(
-            'Location error: $e. Using default.',
-            isError: true,
-          );
+
+          if (e.toString().contains('Location services are disabled')) {
+            bool opened = await Geolocator.openLocationSettings();
+            if (opened) {
+              // Should we retry?
+              // For now, let's just use default but warn user gently or just return
+            }
+
+            _showLuxuryDialog(
+              'Location services disabled. Using default location.',
+              isError: false, // Not an error strictly, just a warning
+            );
+          } else {
+            _showLuxuryDialog(
+              'Location error: $e. Using default.',
+              isError: true,
+            );
+          }
         }
       }
 
@@ -1046,95 +1100,97 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         : "Therapist";
 
     return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // New Header Layout
+          // 1. Refined Header Layout
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              // Logout Button (Far Left)
+              IconButton(
+                onPressed: _handleLogout,
+                icon: Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: textColor.withOpacity(0.4),
+                  size: 20,
+                ),
+                tooltip: 'Logout',
+              ),
+              // Status Group (Right)
+              Row(
+                children: [
+                  // Location Indicator
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.location_on, color: goldColor, size: 16),
-                        const SizedBox(width: 4),
-                        Flexible(
+                        Icon(Icons.location_on, color: goldColor, size: 14),
+                        const SizedBox(width: 6),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 100),
                           child: Text(
                             _currentAddress,
                             style: TextStyle(
                               color: textColor.withOpacity(0.7),
-                              fontSize: 14,
+                              fontSize: 12,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
-                    if (user?['customer_tier'] == 'store')
-                      Container(
-                        margin: const EdgeInsets.only(top: 4),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: goldColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: goldColor.withOpacity(0.5)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.storefront, color: goldColor, size: 14),
-                            const SizedBox(width: 6),
-                            Text(
-                              "STORE TIER",
-                              style: TextStyle(
-                                color: goldColor,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              // Status Toggle
-              const SizedBox(width: 16),
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: _isOnline ? Colors.green : Colors.grey,
-                      shape: BoxShape.circle,
-                      boxShadow: _isOnline
-                          ? [
-                              BoxShadow(
-                                color: Colors.green.withOpacity(0.5),
-                                blurRadius: 4,
-                                spreadRadius: 1,
-                              ),
-                            ]
-                          : null,
-                    ),
                   ),
-                  const SizedBox(width: 8),
-                  Transform.scale(
-                    scale: 0.8,
-                    child: Switch.adaptive(
-                      value: _isOnline,
-                      onChanged: _isUpdating ? null : _toggleOnline,
-                      activeColor: goldColor,
-                      activeTrackColor: goldColor.withOpacity(0.3),
+                  const SizedBox(width: 12),
+                  // Online Toggle
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: BoxDecoration(
+                            color: _isOnline ? Colors.green : Colors.grey,
+                            shape: BoxShape.circle,
+                            boxShadow: _isOnline
+                                ? [
+                                    BoxShadow(
+                                      color: Colors.green.withOpacity(0.5),
+                                      blurRadius: 4,
+                                      spreadRadius: 1,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                        ),
+                        Transform.scale(
+                          scale: 0.7,
+                          child: Switch.adaptive(
+                            value: _isOnline,
+                            onChanged: _isUpdating ? null : _toggleOnline,
+                            activeColor: goldColor,
+                            activeTrackColor: goldColor.withOpacity(0.3),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -1144,108 +1200,21 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
           const SizedBox(height: 32),
 
-          // Greeting & Profile
+          // 2. Hero Section: Greeting & Avatar (Standard Professional Layout)
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Dynamic Verification Badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _verificationStatus == 'verified'
-                            ? goldColor.withOpacity(0.15)
-                            : (_verificationStatus == 'rejected'
-                                  ? Colors.red.withOpacity(0.15)
-                                  : Colors.orange.withOpacity(0.15)),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _verificationStatus == 'verified'
-                              ? goldColor.withOpacity(0.3)
-                              : (_verificationStatus == 'rejected'
-                                    ? Colors.red.withOpacity(0.3)
-                                    : Colors.orange.withOpacity(0.3)),
-                          width: 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _verificationStatus == 'verified'
-                                ? Icons.verified
-                                : (_verificationStatus == 'rejected'
-                                      ? Icons.cancel
-                                      : Icons.pending),
-                            color: _verificationStatus == 'verified'
-                                ? goldColor
-                                : (_verificationStatus == 'rejected'
-                                      ? Colors.red
-                                      : Colors.orange),
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _verificationStatus == 'verified'
-                                ? 'VERIFIED'
-                                : (_verificationStatus == 'rejected'
-                                      ? 'REJECTED'
-                                      : 'PENDING'),
-                            style: TextStyle(
-                              color: _verificationStatus == 'verified'
-                                  ? goldColor
-                                  : (_verificationStatus == 'rejected'
-                                        ? Colors.red
-                                        : Colors.orange),
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Welcome back,',
-                      style: TextStyle(
-                        color: themeProvider.subtextColor,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      name,
-                      style: TextStyle(
-                        color: textColor,
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        height: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
+              // Glowing Avatar
               Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: goldColor.withOpacity(0.5),
+                    color: goldColor.withOpacity(0.2),
                     width: 2,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: goldColor.withOpacity(0.2),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+                      color: goldColor.withOpacity(0.1),
+                      blurRadius: 10,
                     ),
                   ],
                 ),
@@ -1262,6 +1231,75 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   child: user?['profile_photo_url'] == null
                       ? Icon(Icons.person, color: goldColor, size: 32)
                       : null,
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Welcome back,',
+                          style: TextStyle(
+                            color: themeProvider.subtextColor,
+                            fontSize: 14,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (user?['customer_tier'] == 'store')
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: goldColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: goldColor.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Text(
+                              "STORE",
+                              style: TextStyle(
+                                color: goldColor,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: ShaderMask(
+                            shaderCallback: (bounds) => LinearGradient(
+                              colors: [textColor, goldColor.withOpacity(0.8)],
+                            ).createShader(bounds),
+                            child: Text(
+                              name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                height: 1.1,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        if (_verificationStatus == 'verified') ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.verified, color: goldColor, size: 20),
+                        ],
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1333,92 +1371,159 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     required Color goldColor,
     required ThemeProvider themeProvider,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: goldColor, size: 24),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              color: themeProvider.textColor,
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.1)),
           ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(color: themeProvider.subtextColor, fontSize: 12),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: goldColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: goldColor, size: 20),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                value,
+                style: TextStyle(
+                  color: themeProvider.textColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                title.toUpperCase(),
+                style: TextStyle(
+                  color: themeProvider.subtextColor,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildWalletSection(Color goldColor, ThemeProvider themeProvider) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [goldColor.withOpacity(0.2), goldColor.withOpacity(0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: goldColor.withOpacity(0.2), width: 1),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Wallet Balance',
-                  style: TextStyle(
-                    color: themeProvider.subtextColor,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$_currency ${NumberFormat('#,##0', 'en_US').format(_walletBalance)}',
-                  style: TextStyle(
-                    color: goldColor,
-                    fontSize: 32,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                goldColor.withOpacity(0.15),
+                goldColor.withOpacity(0.05),
               ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              // TODO: Implement withdraw functionality
-              _showLuxuryDialog('Withdraw feature coming soon!');
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: goldColor,
-              foregroundColor: Colors.black,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: goldColor.withOpacity(0.25), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
               ),
-            ),
-            child: const Text(
-              'Withdraw',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            ],
           ),
-        ],
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.account_balance_wallet_rounded,
+                          color: goldColor.withOpacity(0.5),
+                          size: 14,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'WALLET BALANCE',
+                          style: TextStyle(
+                            color: goldColor.withOpacity(0.5),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ShaderMask(
+                      shaderCallback: (bounds) => const LinearGradient(
+                        colors: [Colors.white, Color(0xFFFFD700)],
+                      ).createShader(bounds),
+                      child: Text(
+                        '$_currency ${NumberFormat('#,##0', 'en_US').format(_walletBalance)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 34,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -1,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: goldColor.withOpacity(0.3),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: ElevatedButton(
+                  onPressed: () {
+                    _showLuxuryDialog('Withdraw feature coming soon!');
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: goldColor,
+                    foregroundColor: Colors.black,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text(
+                    'Withdraw',
+                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -528,6 +528,25 @@ class ApiService {
     }
   }
 
+  Future<void> logout(String token) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/logout'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Logout failed: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Logout Error: $e');
+    }
+  }
+
   Future<Map<String, dynamic>> getBookingStatus(
     int bookingId,
     String token,

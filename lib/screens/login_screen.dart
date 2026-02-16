@@ -79,8 +79,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      _showLuxuryDialog('Login Successful!');
-
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(

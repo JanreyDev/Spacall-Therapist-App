@@ -41,6 +41,8 @@ class _RegistrationScreenState extends State<RegistrationScreen>
   XFile? _idCardPhoto;
   XFile? _idCardBackPhoto;
   XFile? _idSelfiePhoto;
+  XFile? _licensePhoto;
+  List<XFile> _certificates = [];
 
   final ImagePicker _picker = ImagePicker();
 
@@ -131,6 +133,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                     if (type == 'profile') _profilePhoto = result;
                     if (type == 'id_card') _idCardPhoto = result;
                     if (type == 'id_card_back') _idCardBackPhoto = result;
+                    if (type == 'license') _licensePhoto = result;
                   });
                 }
               },
@@ -157,6 +160,8 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         if (type == 'id_card') _idCardPhoto = image;
         if (type == 'id_card_back') _idCardBackPhoto = image;
         if (type == 'id_selfie') _idSelfiePhoto = image;
+        if (type == 'license') _licensePhoto = image;
+        if (type == 'certificate') _certificates.add(image);
       });
     }
   }
@@ -174,6 +179,24 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       return;
     }
 
+    // MANDATORY PHOTO VALIDATION
+    if (_profilePhoto == null) {
+      _showLuxuryDialog('Profile photo is required', isError: true);
+      return;
+    }
+    if (_idCardPhoto == null) {
+      _showLuxuryDialog('ID card front photo is required', isError: true);
+      return;
+    }
+    if (_idCardBackPhoto == null) {
+      _showLuxuryDialog('ID card back photo is required', isError: true);
+      return;
+    }
+    if (_idSelfiePhoto == null) {
+      _showLuxuryDialog('Face scan selfie is required', isError: true);
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -185,10 +208,10 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         gender: _gender,
         dob: _dob.toIso8601String().split('T')[0],
         pin: _pinController.text.trim(),
-        profilePhoto: null, // Don't send images here
-        idCardPhoto: null,
-        idCardBackPhoto: null,
-        idSelfiePhoto: null,
+        profilePhoto: _profilePhoto,
+        idCardPhoto: _idCardPhoto,
+        idCardBackPhoto: _idCardBackPhoto,
+        idSelfiePhoto: _idSelfiePhoto,
         role: 'therapist',
         customerTier: _subscriptionTier,
         storeName: _subscriptionTier == 'store'
@@ -202,21 +225,32 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       if (token == null) throw Exception('No token returned');
 
       // 2. Sequential Image Uploads
-      final uploads = {
-        'profile_photo': _profilePhoto,
-        'id_card_photo': _idCardPhoto,
-        'id_card_back_photo': _idCardBackPhoto,
-        'id_selfie_photo': _idSelfiePhoto,
-      };
-
-      for (var entry in uploads.entries) {
-        if (entry.value != null) {
+      // Sequential Uploads for OPTIONAL Credentials
+      try {
+        if (_licensePhoto != null) {
+          debugPrint("Uploading License...");
           await _apiService.uploadProfileImage(
             token: token,
-            type: entry.key,
-            imageFile: entry.value,
+            type: 'license_photo',
+            imageFile: _licensePhoto,
           );
         }
+
+        for (var i = 0; i < _certificates.length; i++) {
+          debugPrint("Uploading Certificate ${i + 1}...");
+          await _apiService.uploadProfileImage(
+            token: token,
+            type: 'certificate_photo',
+            imageFile: _certificates[i],
+          );
+        }
+      } catch (e) {
+        debugPrint("Sequential Upload Error: $e");
+        _showLuxuryDialog(
+          'Profile created, but some credentials failed to upload. You can update them later in your profile.\nError: $e',
+          isError: true,
+        );
+        // We still consider registration "successful" enough to proceed
       }
 
       if (!mounted) return;
@@ -330,8 +364,12 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                 ]),
 
                 const SizedBox(height: 24),
-                _buildSectionLabel("DOCUMENTS"),
+                _buildSectionLabel("MANDATORY DOCUMENTS"),
                 _buildImagePickerSection(),
+
+                const SizedBox(height: 24),
+                _buildSectionLabel("PROFESSIONAL CREDENTIALS (OPTIONAL)"),
+                _buildCredentialsSection(),
 
                 const SizedBox(height: 48),
                 _isLoading
@@ -615,31 +653,40 @@ class _RegistrationScreenState extends State<RegistrationScreen>
           _profilePhoto,
           () => _showSourceSelection('profile'),
           Icons.person_add,
+          isRequired: true,
         ),
         _buildProfessionalImagePicker(
           'ID Front',
           _idCardPhoto,
           () => _showSourceSelection('id_card'),
           Icons.badge,
+          isRequired: true,
         ),
         _buildProfessionalImagePicker(
           'ID Back',
           _idCardBackPhoto,
           () => _showSourceSelection('id_card_back'),
           Icons.badge,
+          isRequired: true,
         ),
-        _buildProfessionalImagePicker('Face Scan', _idSelfiePhoto, () async {
-          final XFile? result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const SpacallCameraScreen(
-                isFace: true,
-                isBlinkRequired: true,
+        _buildProfessionalImagePicker(
+          'Face Scan',
+          _idSelfiePhoto,
+          () async {
+            final XFile? result = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SpacallCameraScreen(
+                  isFace: true,
+                  isBlinkRequired: true,
+                ),
               ),
-            ),
-          );
-          if (result != null) setState(() => _idSelfiePhoto = result);
-        }, Icons.face_retouching_natural),
+            );
+            if (result != null) setState(() => _idSelfiePhoto = result);
+          },
+          Icons.face_retouching_natural,
+          isRequired: true,
+        ),
       ],
     );
   }
@@ -648,8 +695,9 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     String label,
     XFile? image,
     VoidCallback onTap,
-    IconData icon,
-  ) {
+    IconData icon, {
+    bool isRequired = false,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -726,6 +774,119 @@ class _RegistrationScreenState extends State<RegistrationScreen>
             fontWeight: FontWeight.bold,
             letterSpacing: 1.0,
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCredentialsSection() {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.4,
+      children: [
+        _buildProfessionalImagePicker(
+          'License',
+          _licensePhoto,
+          () => _showSourceSelection('license'),
+          Icons.card_membership_rounded,
+          isRequired: false,
+        ),
+        _buildAddCertificateButton(),
+        ...List.generate(
+          _certificates.length,
+          (index) => _buildCertificateItem(index),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAddCertificateButton() {
+    return GestureDetector(
+      onTap: () => _pickImage('certificate', source: ImageSource.gallery),
+      child: Container(
+        decoration: BoxDecoration(
+          color: _bgSecondary,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withOpacity(0.05)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.add_photo_alternate_outlined,
+              color: _goldPrimary.withOpacity(0.4),
+              size: 24,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Add Certificate",
+              style: TextStyle(
+                color: _textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCertificateItem(int index) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _goldPrimary.withOpacity(0.4), width: 1),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(11),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            kIsWeb
+                ? Image.network(_certificates[index].path, fit: BoxFit.cover)
+                : Image.file(
+                    File(_certificates[index].path),
+                    fit: BoxFit.cover,
+                  ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black54],
+                ),
+              ),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: () => setState(() => _certificates.removeAt(index)),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 14),
+                ),
+              ),
+            ),
+            const Positioned(
+              bottom: 8,
+              left: 8,
+              child: Icon(
+                Icons.verified_user_rounded,
+                color: _goldPrimary,
+                size: 16,
+              ),
+            ),
+          ],
         ),
       ),
     );

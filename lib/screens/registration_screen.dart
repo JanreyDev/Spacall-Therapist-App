@@ -211,10 +211,10 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         gender: _gender,
         dob: _dob.toIso8601String().split('T')[0],
         pin: _pinController.text.trim(),
-        profilePhoto: _profilePhoto,
-        idCardPhoto: _idCardPhoto,
-        idCardBackPhoto: _idCardBackPhoto,
-        idSelfiePhoto: _idSelfiePhoto,
+        profilePhoto: null,
+        idCardPhoto: null,
+        idCardBackPhoto: null,
+        idSelfiePhoto: null,
         role: 'therapist',
         customerTier: _subscriptionTier,
         storeName: _subscriptionTier == 'store'
@@ -227,9 +227,27 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       final token = response['token'];
       if (token == null) throw Exception('No token returned');
 
-      // 2. Sequential Image Uploads
-      // Sequential Uploads for OPTIONAL Credentials
       try {
+        // 2a. Mandatory Photos
+        final mandatoryUploads = {
+          'profile_photo': _profilePhoto,
+          'id_card_photo': _idCardPhoto,
+          'id_card_back_photo': _idCardBackPhoto,
+          'id_selfie_photo': _idSelfiePhoto,
+        };
+
+        for (var entry in mandatoryUploads.entries) {
+          if (entry.value != null) {
+            debugPrint("Uploading ${entry.key}...");
+            await _apiService.uploadProfileImage(
+              token: token,
+              type: entry.key,
+              imageFile: entry.value,
+            );
+          }
+        }
+
+        // 2b. Optional Credentials
         if (_licensePhoto != null) {
           debugPrint("Uploading License...");
           await _apiService.uploadProfileImage(

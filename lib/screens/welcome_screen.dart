@@ -863,7 +863,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final user = widget.userData['user'];
     final goldColor = themeProvider.goldColor;
     final textColor = themeProvider.textColor;
-    final name = user != null ? "${user['first_name']}" : "Store";
+    final firstName = user?['first_name'] ?? "";
+    final middleName = user?['middle_name'] ?? "";
+    final lastName = user?['last_name'] ?? "";
+    final name = middleName.isNotEmpty
+        ? "$firstName $middleName $lastName"
+        : (firstName.isNotEmpty ? "$firstName $lastName" : "Store");
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
@@ -1095,9 +1100,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final goldColor = themeProvider.goldColor;
     final textColor = themeProvider.textColor;
 
-    final name = user != null
-        ? "${user['first_name']} ${user['last_name']}"
-        : "Therapist";
+    final firstName = user?['first_name'] ?? "Therapist";
+    final middleName = user?['middle_name'] ?? "";
+    final lastName = user?['last_name'] ?? "";
+    final name = middleName.isNotEmpty
+        ? "$firstName $middleName $lastName"
+        : (lastName.isNotEmpty ? "$firstName $lastName" : firstName);
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),

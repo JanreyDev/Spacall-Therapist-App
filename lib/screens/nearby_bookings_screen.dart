@@ -189,7 +189,12 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            "${customer['first_name']} ${customer['last_name']}",
+                            (customer['middle_name'] != null &&
+                                    customer['middle_name']
+                                        .toString()
+                                        .isNotEmpty)
+                                ? "${customer['first_name']} ${customer['middle_name']} ${customer['last_name']}"
+                                : "${customer['first_name']} ${customer['last_name']}",
                             style: const TextStyle(
                               color: Colors.grey,
                               fontSize: 13,

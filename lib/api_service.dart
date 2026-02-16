@@ -200,6 +200,7 @@ class ApiService {
   Future<Map<String, dynamic>> registerProfile({
     required String mobileNumber,
     required String firstName,
+    String? middleName,
     required String lastName,
     required String gender,
     required String dob,
@@ -223,6 +224,9 @@ class ApiService {
       request.headers['Accept'] = 'application/json';
       request.fields['mobile_number'] = mobileNumber;
       request.fields['first_name'] = firstName;
+      if (middleName != null && middleName.isNotEmpty) {
+        request.fields['middle_name'] = middleName;
+      }
       request.fields['last_name'] = lastName;
       request.fields['gender'] = gender;
       request.fields['date_of_birth'] = dob;

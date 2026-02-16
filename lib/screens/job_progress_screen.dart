@@ -306,7 +306,10 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  '${customer['first_name'] ?? 'Guest'} ${customer['last_name'] ?? ''}',
+                  customer['middle_name'] != null &&
+                          customer['middle_name'].toString().isNotEmpty
+                      ? '${customer['first_name']} ${customer['middle_name']} ${customer['last_name']}'
+                      : '${customer['first_name'] ?? 'Guest'} ${customer['last_name'] ?? ''}',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
@@ -482,7 +485,10 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${customer['first_name'] ?? 'Client'} ${customer['last_name'] ?? ''}',
+                customer['middle_name'] != null &&
+                        customer['middle_name'].toString().isNotEmpty
+                    ? '${customer['first_name']} ${customer['middle_name']} ${customer['last_name']}'
+                    : '${customer['first_name'] ?? 'Client'} ${customer['last_name'] ?? ''}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,

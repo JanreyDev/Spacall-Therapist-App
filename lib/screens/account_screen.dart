@@ -179,7 +179,11 @@ class _AccountScreenState extends State<AccountScreen> {
 
     final user = widget.userData['user'] ?? {};
     final firstName = user['first_name'] ?? 'Therapist';
+    final middleName = user['middle_name'] ?? '';
     final lastName = user['last_name'] ?? '';
+    final fullName = middleName.isNotEmpty
+        ? "$firstName $middleName $lastName"
+        : (lastName.isNotEmpty ? "$firstName $lastName" : firstName);
     final email = user['email'] ?? 'No email provided';
     final phone = user['mobile_number'] ?? 'No phone provided';
     String? profileUrl = ApiService.normalizePhotoUrl(
@@ -264,7 +268,7 @@ class _AccountScreenState extends State<AccountScreen> {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      "$firstName $lastName",
+                      fullName,
                       style: TextStyle(
                         color: themeProvider.textColor,
                         fontSize: 28,

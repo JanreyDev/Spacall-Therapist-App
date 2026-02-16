@@ -20,6 +20,7 @@ class RegistrationScreen extends StatefulWidget {
 class _RegistrationScreenState extends State<RegistrationScreen>
     with SingleTickerProviderStateMixin {
   final _firstNameController = TextEditingController();
+  final _middleNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _pinController = TextEditingController();
   final _confirmPinController = TextEditingController();
@@ -82,6 +83,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
   void dispose() {
     _animationController.dispose();
     _firstNameController.dispose();
+    _middleNameController.dispose();
     _lastNameController.dispose();
     _pinController.dispose();
     _confirmPinController.dispose();
@@ -204,6 +206,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       final response = await _apiService.registerProfile(
         mobileNumber: widget.mobileNumber,
         firstName: _firstNameController.text.trim(),
+        middleName: _middleNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         gender: _gender,
         dob: _dob.toIso8601String().split('T')[0],
@@ -317,6 +320,12 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                   _buildProfessionalTextField(
                     controller: _firstNameController,
                     label: 'First Name',
+                    icon: Icons.person_outline,
+                  ),
+                  const Divider(color: Colors.white10),
+                  _buildProfessionalTextField(
+                    controller: _middleNameController,
+                    label: 'Middle Name (Optional)',
                     icon: Icons.person_outline,
                   ),
                   const Divider(color: Colors.white10),
@@ -509,10 +518,14 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                 ),
                 isExpanded: true,
                 style: const TextStyle(color: _textPrimary, fontSize: 15),
-                items: ['male', 'female', 'other'].map((String value) {
+                items: ['male', 'female', 'lgbt'].map((String value) {
                   return DropdownMenuItem<String>(
                     value: value,
-                    child: Text(value[0].toUpperCase() + value.substring(1)),
+                    child: Text(
+                      value == 'lgbt'
+                          ? 'LGBT'
+                          : value[0].toUpperCase() + value.substring(1),
+                    ),
                   );
                 }).toList(),
                 onChanged: (val) => setState(() => _gender = val!),

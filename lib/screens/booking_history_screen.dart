@@ -191,8 +191,12 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
     final dateStr = booking['created_at'];
     final date = DateTime.parse(dateStr);
     final formattedDate = DateFormat('MMM dd, yyyy - hh:mm a').format(date);
-    final customer = booking['customer'] != null
-        ? "${booking['customer']['first_name']} ${booking['customer']['last_name']}"
+    final cust = booking['customer'];
+    final customer = cust != null
+        ? (cust['middle_name'] != null &&
+                  cust['middle_name'].toString().isNotEmpty
+              ? "${cust['first_name']} ${cust['middle_name']} ${cust['last_name']}"
+              : "${cust['first_name']} ${cust['last_name']}")
         : "Customer Not Found";
 
     return Container(

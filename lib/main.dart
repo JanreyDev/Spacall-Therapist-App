@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'screens/onboarding_screen.dart';
+import 'screens/animated_logo_screen.dart';
 import 'theme_provider.dart';
 
 void main() {
@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
       title: 'Spacall Therapist',
       debugShowCheckedModeBanner: false,
       theme: themeProvider.currentTheme,
-      home: const OnboardingScreen(),
+      home: const AnimatedLogoScreen(),
     );
   }
 }

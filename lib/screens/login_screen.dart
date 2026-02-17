@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pinput/pinput.dart';
 import '../api_service.dart';
 import 'otp_screen.dart';
 import 'welcome_screen.dart';
@@ -18,6 +19,8 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _savedNumber;
   bool _showPinOnly = false;
+  bool _isEnteringPin = false; // New state
+  final _pinFocusNode = FocusNode(); // For PIN input
 
   @override
   void initState() {
@@ -102,166 +105,516 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 12) {
+      return 'Good morning!';
+    } else if (hour >= 12 && hour < 18) {
+      return 'Good afternoon!';
+    } else {
+      return 'Good evening!';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    const goldColor = Color(0xFFD4AF37);
-    const backgroundColor = Color(0xFF121212);
-
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: const Color(0xFF121212),
       resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 32.0),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      children: [
-                        const SizedBox(height: 60),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: goldColor,
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              const Text(
-                                'Welcome Back',
-                                style: TextStyle(
-                                  fontSize: 34,
-                                  fontWeight: FontWeight.bold,
-                                  color: goldColor,
-                                  letterSpacing: 1.1,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _showPinOnly
-                                    ? 'Confirm your PIN to continue'
-                                    : 'Sign in to access luxury wellness',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7),
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
+            return AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: _isEnteringPin
+                  ? _buildPinEntryView(constraints)
+                  : _buildInitialLoginView(constraints),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInitialLoginView(BoxConstraints constraints) {
+    const goldColor = Color(0xFFD4AF37);
+    const surfaceColor = Color(0xFF1E1E1E);
+
+    return SingleChildScrollView(
+      key: const ValueKey('initial_login'),
+      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+        child: IntrinsicHeight(
+          child: Column(
+            children: [
+              const SizedBox(height: 40),
+              // Centered Vertical Header: Logo + Brand
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/images/logo.png',
+                    width: 140,
+                    height: 140,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Icon(Icons.spa, color: goldColor, size: 140),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'SPACALL',
+                    style: TextStyle(
+                      color: goldColor,
+                      fontSize: 42,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 6,
+                    ),
+                  ),
+                ],
+              ),
+
+              const Spacer(),
+
+              Text(
+                _getGreeting(),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              if (_showPinOnly) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    color: surfaceColor,
+                    borderRadius: BorderRadius.circular(30),
+                    border: Border.all(
+                      color: goldColor.withOpacity(0.5),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.phone_android,
+                        color: goldColor.withOpacity(0.7),
+                        size: 22,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            _savedNumber ?? '',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.5,
+                            ),
                           ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: _switchAccount,
+                        child: Icon(
+                          Icons.compare_arrows_rounded,
+                          color: goldColor.withOpacity(0.7),
+                          size: 22,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: _switchAccount,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Not your number? ',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.5),
+                          fontSize: 12,
+                        ),
+                      ),
+                      const Text(
+                        'Switch account',
+                        style: TextStyle(
+                          color: goldColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 60),
+                // PIN Login Card
+                GestureDetector(
+                  onTap: () {
+                    setState(() => _isEnteringPin = true);
+                    _pinFocusNode.requestFocus();
+                  },
+                  child: Container(
+                    width: 130,
+                    height: 130,
+                    decoration: BoxDecoration(
+                      color: goldColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: goldColor.withOpacity(0.4),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 15,
+                          offset: const Offset(0, 8),
                         ),
                       ],
                     ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (_showPinOnly) ...[
-                          Text(
-                            _savedNumber ?? '',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: goldColor,
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          _buildLuxuryTextField(
-                            controller: _pinController,
-                            label: 'Enter PIN',
-                            icon: Icons.lock_outline,
-                            isObscure: true,
-                            isPin: true,
-                          ),
-                          const SizedBox(height: 32),
-                          _isLoading
-                              ? const CircularProgressIndicator(
-                                  color: goldColor,
-                                )
-                              : Column(
-                                  children: [
-                                    _buildGoldButton(
-                                      text: 'LOGIN',
-                                      onPressed: _handlePinLogin,
+                        Column(
+                          children: List.generate(
+                            3,
+                            (row) => Padding(
+                              padding: const EdgeInsets.only(bottom: 3),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: List.generate(
+                                  3,
+                                  (col) => Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 1.5,
                                     ),
-                                    const SizedBox(height: 16),
-                                    TextButton(
-                                      onPressed: _switchAccount,
-                                      child: Text(
-                                        'Logged in as something else?',
-                                        style: TextStyle(
-                                          color: Colors.white.withOpacity(0.5),
+                                    child: Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: goldColor,
+                                        borderRadius: BorderRadius.circular(
+                                          1.5,
                                         ),
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
-                        ] else ...[
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Mobile Number',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontWeight: FontWeight.w500,
-                                fontSize: 14,
                               ),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          _buildLuxuryTextField(
-                            controller: _phoneController,
-                            label: '',
-                            icon: Icons.phone_outlined,
-                            hintText: '09XXXXXXX',
-                          ),
-                          const SizedBox(height: 40),
-                          _isLoading
-                              ? const CircularProgressIndicator(
-                                  color: goldColor,
-                                )
-                              : _buildGoldButton(
-                                  text: 'SEND OTP',
-                                  onPressed: _handleLogin,
-                                ),
-                        ],
-                        const SizedBox(height: 40),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          child: Text(
-                            'By continuing, you agree to our Terms of Service and Privacy Policy',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.4),
-                              fontSize: 12,
-                            ),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'PIN Login',
+                          style: TextStyle(
+                            color: goldColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ],
                     ),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 24.0),
-                      child: Text(
-                        'Viscaria IT Solutions, Inc. - version 1.0.0',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.2),
-                          fontSize: 10,
+                  ),
+                ),
+              ] else ...[
+                TextField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                  decoration: InputDecoration(
+                    hintText: '09XXXXXXXXX',
+                    hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+                    prefixIcon: Icon(
+                      Icons.phone_android,
+                      color: goldColor.withOpacity(0.7),
+                    ),
+                    filled: true,
+                    fillColor: surfaceColor,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: BorderSide(
+                        color: goldColor.withOpacity(0.5),
+                        width: 1,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(30),
+                      borderSide: const BorderSide(
+                        color: goldColor,
+                        width: 1.5,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 14,
+                    ),
+                  ),
+                ),
+                const Spacer(flex: 3),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    "By tapping next, we'll collect your mobile number's network information to be able to send you a One-Time Password (OTP).",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _isLoading
+                    ? const CircularProgressIndicator(color: goldColor)
+                    : _buildGoldButton(
+                        text: 'SEND OTP',
+                        onPressed: _handleLogin,
+                      ),
+              ],
+
+              const SizedBox(height: 32),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildTextLink('Help Center', () {}),
+                  _buildTextLink('Forgot PIN?', () {}),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+              Text(
+                'Viscaria IT Solutions, Inc. · v1.0.0',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.2),
+                  fontSize: 10,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPinEntryView(BoxConstraints constraints) {
+    const goldColor = Color(0xFFD4AF37);
+    const surfaceColor = Color(0xFF1E1E1E);
+
+    return SingleChildScrollView(
+      key: const ValueKey('pin_entry'),
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+        child: IntrinsicHeight(
+          child: Column(
+            children: [
+              const SizedBox(height: 40),
+              // Header
+              Column(
+                children: [
+                  Image.asset(
+                    'assets/images/logo.png',
+                    width: 110,
+                    height: 110,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Icon(Icons.spa, color: goldColor, size: 110),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'SPACALL',
+                    style: TextStyle(
+                      color: goldColor,
+                      fontSize: 34,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 5,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 40),
+              Text(
+                _getGreeting(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: surfaceColor,
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(
+                    color: goldColor.withOpacity(0.5),
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.phone_android,
+                      color: goldColor.withOpacity(0.7),
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          _savedNumber ?? '',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
+                          ),
                         ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: () => setState(() => _isEnteringPin = false),
+                      child: Icon(
+                        Icons.compare_arrows_rounded,
+                        color: goldColor.withOpacity(0.7),
+                        size: 22,
                       ),
                     ),
                   ],
                 ),
               ),
-            );
-          },
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () => setState(() => _isEnteringPin = false),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Not your number? ',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const Text(
+                      'Switch account',
+                      style: TextStyle(
+                        color: goldColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 60),
+
+              const Text(
+                'Enter your PIN',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              Pinput(
+                length: 6,
+                controller: _pinController,
+                focusNode: _pinFocusNode,
+                autofocus: true,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                onCompleted: (pin) => _handlePinLogin(),
+                defaultPinTheme: PinTheme(
+                  width: 45,
+                  height: 55,
+                  textStyle: const TextStyle(
+                    fontSize: 22,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  decoration: BoxDecoration(
+                    color: goldColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: goldColor.withOpacity(0.3)),
+                  ),
+                ),
+                focusedPinTheme: PinTheme(
+                  width: 48,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: goldColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: goldColor, width: 1.5),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 40),
+
+              Text(
+                'Never share your PIN or OTP with anyone.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 14,
+                ),
+              ),
+
+              const Spacer(),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildTextLink('Help Center', () {}),
+                  _buildTextLink('Forgot PIN?', () {}),
+                ],
+              ),
+              const SizedBox(height: 32),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextLink(String text, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.6),
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -358,45 +711,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildLuxuryTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool isObscure = false,
-    bool isPin = false,
-    String? hintText,
-  }) {
-    const goldColor = Color(0xFFD4AF37);
-
-    return TextField(
-      controller: controller,
-      obscureText: isObscure,
-      keyboardType: TextInputType.number,
-      maxLength: isPin ? 6 : null,
-      style: const TextStyle(color: Colors.white, fontSize: 18),
-      textAlign: TextAlign.start,
-      decoration: InputDecoration(
-        hintText: hintText,
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-        prefixIcon: Icon(icon, color: goldColor),
-        counterText: "",
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.05),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: goldColor.withOpacity(0.5), width: 1.5),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: goldColor, width: 2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 18,
-        ),
-      ),
-    );
-  }
+  // Removed _buildLuxuryTextField as it's no longer used
 
   Widget _buildGoldButton({
     required String text,
@@ -404,9 +719,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }) {
     return Container(
       width: double.infinity,
-      height: 58,
+      height: 54,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         gradient: const LinearGradient(
           colors: [
             Color(0xFFB8860B),
@@ -429,7 +744,7 @@ class _LoginScreenState extends State<LoginScreen> {
         color: Colors.transparent,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           child: Center(
             child: Text(
               text,

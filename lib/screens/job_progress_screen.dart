@@ -35,6 +35,9 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _chatScrollController = ScrollController();
   int? _currentUserId;
+  Timer? _countdownTimer;
+  int _remainingSeconds = 0;
+  bool _timerStarted = false;
 
   @override
   void initState() {
@@ -136,6 +139,18 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         setState(() {
           _currentStatus = data['booking_status'];
         });
+        // If already in_progress (e.g. app restarted), sync timer from started_at
+        if (data['booking_status'] == 'in_progress' && !_timerStarted) {
+          final booking = data['booking'] as Map<String, dynamic>?;
+          final rawBooking = booking?['duration_minutes'];
+          final rawService = booking?['service']?['duration_minutes'];
+          final raw = rawBooking ?? rawService;
+          final mins = raw is int
+              ? raw
+              : int.tryParse(raw?.toString() ?? '') ?? 60;
+          final startedAt = booking?['started_at']?.toString();
+          _startCountdown(mins, startedAt: startedAt);
+        }
       }
     } catch (e) {
       debugPrint('Error fetching latest status: $e');
@@ -146,9 +161,53 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   void dispose() {
     _locationTimer?.cancel();
     _chatRefreshTimer?.cancel();
+    _countdownTimer?.cancel();
     _messageController.dispose();
     _chatScrollController.dispose();
     super.dispose();
+  }
+
+  void _startCountdown(int durationMinutes, {String? startedAt}) {
+    if (_timerStarted) return;
+    final totalSeconds = durationMinutes * 60;
+    int initialRemaining = totalSeconds;
+
+    // If we have the actual start time, compute elapsed to stay in sync
+    if (startedAt != null) {
+      try {
+        final startTime = DateTime.parse(startedAt).toLocal();
+        final elapsed = DateTime.now().difference(startTime).inSeconds;
+        initialRemaining = (totalSeconds - elapsed).clamp(0, totalSeconds);
+      } catch (_) {}
+    }
+
+    setState(() {
+      _timerStarted = true;
+      _remainingSeconds = initialRemaining;
+    });
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        if (_remainingSeconds > 0) {
+          _remainingSeconds--;
+        } else {
+          timer.cancel();
+        }
+      });
+    });
+  }
+
+  String _formatCountdown(int totalSeconds) {
+    final h = totalSeconds ~/ 3600;
+    final m = (totalSeconds % 3600) ~/ 60;
+    final s = totalSeconds % 60;
+    if (h > 0) {
+      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
   void _startChatPolling() {
@@ -214,6 +273,20 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         _currentStatus = status;
         _isLoading = false;
       });
+      // Start countdown when service begins
+      if (status == 'in_progress') {
+        final rawBooking = widget.booking['duration_minutes'];
+        final rawService = widget.booking['service']?['duration_minutes'];
+        final raw = rawBooking ?? rawService;
+        final durationMinutes = raw is int
+            ? raw
+            : int.tryParse(raw?.toString() ?? '') ?? 60;
+        // Use now() as startedAt since we just triggered the status change
+        _startCountdown(
+          durationMinutes,
+          startedAt: DateTime.now().toIso8601String(),
+        );
+      }
       if (status == 'completed' ||
           status == 'cancelled' ||
           status == 'arrived') {
@@ -588,6 +661,12 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
           ),
           const SizedBox(height: 30),
 
+          // Countdown Timer (only when in_progress)
+          if (_currentStatus == 'in_progress') ...[
+            _buildCountdownTimer(),
+            const SizedBox(height: 30),
+          ],
+
           Text(
             'SERVICE DETAILS',
             style: TextStyle(
@@ -603,11 +682,15 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
             'Service',
             service['name'] ?? 'Luxury Treatment',
           ),
-          _buildDetailItem(
-            Icons.access_time,
-            'Duration',
-            '${service['duration_minutes'] ?? '60'} Minutes Session',
-          ),
+          _buildDetailItem(Icons.access_time, 'Duration', () {
+            final raw =
+                widget.booking['duration_minutes'] ??
+                service['duration_minutes'];
+            final mins = raw is int
+                ? raw
+                : int.tryParse(raw?.toString() ?? '') ?? 60;
+            return '$mins Minutes Session';
+          }()),
           if (widget.booking['scheduled_at'] != null)
             _buildDetailItem(
               Icons.calendar_today,
@@ -856,6 +939,131 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
           Text(
             isMe ? 'You' : 'Client',
             style: const TextStyle(color: Colors.white24, fontSize: 10),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCountdownTimer() {
+    const goldColor = Color(0xFFD4AF37);
+    final service = widget.booking['service'] ?? {};
+    final rawBooking = widget.booking['duration_minutes'];
+    final rawService = service['duration_minutes'];
+    final rawDuration = rawBooking ?? rawService;
+    final durationMinutes = rawDuration is int
+        ? rawDuration
+        : int.tryParse(rawDuration?.toString() ?? '') ?? 60;
+    final totalSeconds = durationMinutes * 60;
+    final isTimeUp = _remainingSeconds == 0 && _timerStarted;
+    final progress = totalSeconds > 0 ? _remainingSeconds / totalSeconds : 0.0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isTimeUp
+              ? Colors.red.withOpacity(0.5)
+              : goldColor.withOpacity(0.2),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isTimeUp
+                ? Colors.red.withOpacity(0.1)
+                : goldColor.withOpacity(0.05),
+            blurRadius: 20,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Text(
+            'SESSION TIMER',
+            style: TextStyle(
+              color: goldColor.withOpacity(0.7),
+              fontSize: 11,
+              letterSpacing: 2.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: 160,
+            height: 160,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Background ring
+                SizedBox(
+                  width: 160,
+                  height: 160,
+                  child: CircularProgressIndicator(
+                    value: 1.0,
+                    strokeWidth: 8,
+                    color: Colors.white.withOpacity(0.05),
+                  ),
+                ),
+                // Progress ring
+                SizedBox(
+                  width: 160,
+                  height: 160,
+                  child: CircularProgressIndicator(
+                    value: progress.toDouble(),
+                    strokeWidth: 8,
+                    strokeCap: StrokeCap.round,
+                    color: isTimeUp ? Colors.red : goldColor,
+                  ),
+                ),
+                // Time display
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          isTimeUp
+                              ? "TIME'S\nUP"
+                              : _formatCountdown(_remainingSeconds),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: isTimeUp ? Colors.red : Colors.white,
+                            fontSize: isTimeUp ? 20 : 32,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: isTimeUp ? 1.0 : 2,
+                            height: 1.1,
+                          ),
+                        ),
+                      ),
+                      if (!isTimeUp)
+                        Text(
+                          'REMAINING',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.3),
+                            fontSize: 9,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            '$durationMinutes MIN SESSION',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.3),
+              fontSize: 11,
+              letterSpacing: 1.5,
+            ),
           ),
         ],
       ),

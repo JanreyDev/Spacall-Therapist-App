@@ -46,13 +46,14 @@ class _RegistrationScreenState extends State<RegistrationScreen>
   List<XFile> _certificates = [];
 
   final ImagePicker _picker = ImagePicker();
+  int _currentStep =
+      0; // 0: Personal Details, 1: Security, 2: Documents & Creds
 
   // --- PROFESSIONAL LUXURY CONSTANTS ---
   static const Color _bgPrimary = Color(0xFF0F0F0F);
   static const Color _bgSecondary = Color(0xFF161616);
   static const Color _cardBg = Color(0xFF1E1E1E);
   static const Color _goldPrimary = Color(0xFFD4AF37);
-  static const Color _goldAccent = Color(0xFFB8860B);
   static const Color _textPrimary = Colors.white;
   static const Color _textSecondary = Color(0xFF9E9E9E);
 
@@ -166,6 +167,124 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         if (type == 'certificate') _certificates.add(image);
       });
     }
+  }
+
+  void _nextStep() {
+    if (_currentStep < 2) {
+      // Step 1 Validation (Personal Details)
+      if (_currentStep == 0) {
+        if (_firstNameController.text.trim().isEmpty ||
+            _lastNameController.text.trim().isEmpty) {
+          _showLuxuryDialog(
+            'Please fill in your first and last name',
+            isError: true,
+          );
+          return;
+        }
+      }
+      // Step 2 Validation (Security)
+      if (_currentStep == 1) {
+        if (_pinController.text.length != 6 ||
+            _pinController.text != _confirmPinController.text) {
+          _showLuxuryDialog(
+            'Please enter matching 6-digit PINs',
+            isError: true,
+          );
+          return;
+        }
+      }
+
+      setState(() => _currentStep++);
+    }
+  }
+
+  void _previousStep() {
+    if (_currentStep > 0) {
+      setState(() => _currentStep--);
+    }
+  }
+
+  Widget _buildStepIndicator() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24.0),
+      child: Row(
+        children: [
+          _buildStepCircle(0, "Personal"),
+          _buildStepLine(0),
+          _buildStepCircle(1, "Security"),
+          _buildStepLine(1),
+          _buildStepCircle(2, "Verification"),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepCircle(int step, String label) {
+    bool isActive = _currentStep >= step;
+    bool isCurrent = _currentStep == step;
+
+    return Column(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isActive ? _goldPrimary : Colors.transparent,
+            border: Border.all(
+              color: isActive ? _goldPrimary : _textSecondary.withOpacity(0.3),
+              width: 2,
+            ),
+            boxShadow: isCurrent
+                ? [
+                    BoxShadow(
+                      color: _goldPrimary.withOpacity(0.3),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : [],
+          ),
+          child: Center(
+            child: isActive
+                ? Icon(
+                    _currentStep > step ? Icons.check : Icons.circle,
+                    size: 14,
+                    color: _bgPrimary,
+                  )
+                : Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white12,
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(
+            color: isCurrent ? _goldPrimary : _textSecondary,
+            fontSize: 10,
+            fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStepLine(int afterStep) {
+    bool isActive = _currentStep > afterStep;
+    return Expanded(
+      child: Container(
+        height: 1,
+        margin: const EdgeInsets.only(bottom: 20, left: 8, right: 8),
+        color: isActive ? _goldPrimary : Colors.white10,
+      ),
+    );
   }
 
   Future<void> _register() async {
@@ -299,18 +418,81 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     }
   }
 
+  Widget _buildGoldButton({
+    required String text,
+    required VoidCallback onPressed,
+    bool isSmall = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      height: isSmall ? 48 : 58,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFB8860B),
+            _goldPrimary,
+            Color(0xFFFFD700),
+            _goldPrimary,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          _goldPrimary
+              .withOpacity(0.3)
+              .asShadow(blur: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // --- UI BUILDING ---
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bgPrimary,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: _bgPrimary,
         elevation: 0,
         centerTitle: true,
+        leading: _currentStep > 0
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                onPressed: _previousStep,
+              )
+            : IconButton(
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () => Navigator.pop(context),
+              ),
         title: const Text(
-          'REGISTRATION',
+          'THERAPIST REGISTRATION',
           style: TextStyle(
             color: _goldPrimary,
             fontWeight: FontWeight.bold,
@@ -324,107 +506,161 @@ class _RegistrationScreenState extends State<RegistrationScreen>
         opacity: _fadeAnimation,
         child: SlideTransition(
           position: _slideAnimation,
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildIntroHeader(),
-                const SizedBox(height: 32),
+          child: SafeArea(
+            bottom: false,
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildIntroHeader(),
+                  const SizedBox(height: 24),
+                  _buildStepIndicator(),
+                  const SizedBox(height: 8),
 
-                _buildSectionLabel("PERSONAL DETAILS"),
-                _buildFormCard([
-                  _buildProfessionalTextField(
-                    controller: _firstNameController,
-                    label: 'First Name',
-                    icon: Icons.person_outline,
-                  ),
-                  const Divider(color: Colors.white10),
-                  _buildProfessionalTextField(
-                    controller: _middleNameController,
-                    label: 'Middle Name (Optional)',
-                    icon: Icons.person_outline,
-                  ),
-                  const Divider(color: Colors.white10),
-                  _buildProfessionalTextField(
-                    controller: _lastNameController,
-                    label: 'Last Name',
-                    icon: Icons.person_outline,
-                  ),
-                  const Divider(color: Colors.white10),
-                  _buildProfessionalDropdown(),
-                  const Divider(color: Colors.white10),
-                  _buildProfessionalDatePicker(),
-                  const Divider(color: Colors.white10),
-                  _buildProfessionalTierSelector(),
-                  if (_subscriptionTier == 'store') ...[
-                    const Divider(color: Colors.white10),
-                    _buildProfessionalTextField(
-                      controller: _storeNameController,
-                      label: 'Store / Business Name',
-                      icon: Icons.storefront_outlined,
-                    ),
-                  ],
-                ]),
-
-                const SizedBox(height: 24),
-                _buildSectionLabel("SECURITY"),
-                _buildFormCard([
-                  _buildProfessionalTextField(
-                    controller: _pinController,
-                    label: '6-Digit PIN',
-                    icon: Icons.lock_outline,
-                    isNumber: true,
-                    isObscure: true,
-                    maxLength: 6,
-                  ),
-                  const Divider(color: Colors.white10),
-                  _buildProfessionalTextField(
-                    controller: _confirmPinController,
-                    label: 'Confirm PIN',
-                    icon: Icons.lock_clock_outlined,
-                    isNumber: true,
-                    isObscure: true,
-                    maxLength: 6,
-                  ),
-                ]),
-
-                const SizedBox(height: 24),
-                _buildSectionLabel("MANDATORY DOCUMENTS"),
-                _buildImagePickerSection(),
-
-                const SizedBox(height: 24),
-                _buildSectionLabel("PROFESSIONAL CREDENTIALS (OPTIONAL)"),
-                _buildCredentialsSection(),
-
-                const SizedBox(height: 48),
-                _isLoading
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: const [
-                            CircularProgressIndicator(color: _goldPrimary),
-                            SizedBox(height: 16),
-                            Text(
-                              "Registering... Please wait.",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: _goldPrimary,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                  if (_currentStep == 0) ...[
+                    _buildSectionLabel("PERSONAL DETAILS"),
+                    _buildFormCard([
+                      _buildProfessionalTextField(
+                        controller: _firstNameController,
+                        label: 'First Name',
+                        icon: Icons.person_outline,
+                      ),
+                      const Divider(color: Colors.white10),
+                      _buildProfessionalTextField(
+                        controller: _middleNameController,
+                        label: 'Middle Name (Optional)',
+                        icon: Icons.person_outline,
+                      ),
+                      const Divider(color: Colors.white10),
+                      _buildProfessionalTextField(
+                        controller: _lastNameController,
+                        label: 'Last Name',
+                        icon: Icons.person_outline,
+                      ),
+                      const Divider(color: Colors.white10),
+                      _buildProfessionalDropdown(),
+                      const Divider(color: Colors.white10),
+                      _buildProfessionalDatePicker(),
+                      const Divider(color: Colors.white10),
+                      _buildProfessionalTierSelector(),
+                      if (_subscriptionTier == 'store') ...[
+                        const Divider(color: Colors.white10),
+                        _buildProfessionalTextField(
+                          controller: _storeNameController,
+                          label: 'Store / Business Name',
+                          icon: Icons.storefront_outlined,
                         ),
-                      )
-                    : _buildSubmitButton(),
-                const SizedBox(height: 40),
-              ],
+                      ],
+                    ]),
+                  ],
+
+                  if (_currentStep == 1) ...[
+                    _buildSectionLabel("SECURITY"),
+                    Text(
+                      "Create a 6-digit PIN for your therapist portal access.",
+                      style: TextStyle(
+                        color: _textSecondary,
+                        fontSize: 13,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildFormCard([
+                      _buildProfessionalTextField(
+                        controller: _pinController,
+                        label: '6-Digit PIN',
+                        icon: Icons.lock_outline,
+                        isNumber: true,
+                        isObscure: true,
+                        maxLength: 6,
+                      ),
+                      const Divider(color: Colors.white10),
+                      _buildProfessionalTextField(
+                        controller: _confirmPinController,
+                        label: 'Confirm PIN',
+                        icon: Icons.lock_clock_outlined,
+                        isNumber: true,
+                        isObscure: true,
+                        maxLength: 6,
+                      ),
+                    ]),
+                  ],
+
+                  if (_currentStep == 2) ...[
+                    _buildSectionLabel("MANDATORY DOCUMENTS"),
+                    Text(
+                      "High-quality ID and face scans are required for verification.",
+                      style: TextStyle(
+                        color: _textSecondary,
+                        fontSize: 13,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildImagePickerSection(),
+
+                    const SizedBox(height: 32),
+                    _buildSectionLabel("PROFESSIONAL CREDENTIALS (OPTIONAL)"),
+                    _buildCredentialsSection(),
+                    const SizedBox(height: 24),
+                  ],
+
+                  const SizedBox(height: 40),
+                ],
+              ),
             ),
           ),
         ),
+      ),
+      bottomNavigationBar: Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 8,
+          bottom: MediaQuery.of(context).padding.bottom + 16,
+        ),
+        child: _isLoading
+            ? const SizedBox(
+                height: 58,
+                child: Center(
+                  child: CircularProgressIndicator(color: _goldPrimary),
+                ),
+              )
+            : Row(
+                children: [
+                  if (_currentStep > 0)
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _previousStep,
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: _goldPrimary),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          "BACK",
+                          style: TextStyle(
+                            color: _goldPrimary,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (_currentStep > 0) const SizedBox(width: 16),
+                  Expanded(
+                    flex: 2,
+                    child: _buildGoldButton(
+                      text: _currentStep == 2 ? "PROCEED" : "NEXT STEP",
+                      onPressed: _currentStep == 2 ? _register : _nextStep,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -781,35 +1017,6 @@ class _RegistrationScreenState extends State<RegistrationScreen>
     );
   }
 
-  Widget _buildSubmitButton() {
-    return Container(
-      width: double.infinity,
-      height: 56,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        gradient: const LinearGradient(colors: [_goldAccent, _goldPrimary]),
-      ),
-      child: ElevatedButton(
-        onPressed: _register,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child: const Text(
-          'COMPLETE REGISTRATION',
-          style: TextStyle(
-            color: Color(0xFF1A1A1A),
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.0,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildCredentialsSection() {
     return GridView.count(
       crossAxisCount: 2,
@@ -926,35 +1133,71 @@ class _RegistrationScreenState extends State<RegistrationScreen>
   void _showLuxuryDialog(String message, {bool isError = false}) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: _bgSecondary,
+      barrierDismissible: !isError,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
           side: BorderSide(
-            color: isError ? Colors.redAccent : _goldPrimary,
-            width: 0.5,
+            color: (isError ? Colors.redAccent : _goldPrimary).withOpacity(0.5),
+            width: 1,
           ),
         ),
-        title: Text(
-          isError ? "Error" : "Success",
-          style: TextStyle(
-            color: isError ? Colors.redAccent : _goldPrimary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Text(message, style: const TextStyle(color: _textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              "OK",
-              style: TextStyle(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isError ? Icons.error_outline : Icons.check_circle_outline,
                 color: isError ? Colors.redAccent : _goldPrimary,
+                size: 48,
               ),
-            ),
+              const SizedBox(height: 16),
+              Text(
+                isError ? 'ERROR' : 'SUCCESS',
+                style: const TextStyle(
+                  color: _goldPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70, fontSize: 16),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              _buildGoldButton(
+                text: 'CONTINUE',
+                onPressed: () => Navigator.pop(context),
+                isSmall: true,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+extension ColorExtension on Color {
+  BoxShadow asShadow({
+    double blur = 10,
+    Offset offset = const Offset(0, 4),
+    double spread = 0,
+  }) {
+    return BoxShadow(
+      color: this,
+      blurRadius: blur,
+      offset: offset,
+      spreadRadius: spread,
     );
   }
 }

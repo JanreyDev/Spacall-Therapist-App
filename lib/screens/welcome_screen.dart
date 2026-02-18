@@ -36,6 +36,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Map<String, dynamic>? _ongoingBooking;
   Timer? _pollingTimer;
   int _selectedIndex = 0;
+  Position? _currentPosition;
   int? _lastNearbyBookingId;
 
   int? _lastDirectBookingId;
@@ -94,6 +95,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Future<void> _updateLiveLocation() async {
     try {
       final position = await _determinePosition();
+      setState(() {
+        _currentPosition = position;
+      });
       await _apiService.updateLocation(
         token: widget.userData['token'],
         latitude: position.latitude,
@@ -323,8 +327,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     goldColor.withOpacity(isStore ? 0.3 : 0.15),
                     goldColor.withOpacity(0.05),
                   ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(28),
@@ -372,6 +376,79 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
               child: Column(
                 children: [
+                  // Client Avatar & Distance
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 70,
+                        height: 70,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: goldColor, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: goldColor.withOpacity(0.2),
+                              blurRadius: 10,
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(35),
+                          child: customer['profile_photo_url'] != null
+                              ? Image.network(
+                                  ApiService.normalizePhotoUrl(
+                                    customer['profile_photo_url'],
+                                  )!,
+                                  fit: BoxFit.cover,
+                                )
+                              : Icon(Icons.person, color: goldColor, size: 40),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${customer['first_name']} ${customer['last_name']}',
+                            style: TextStyle(
+                              color: themeProvider.textColor,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Builder(
+                            builder: (context) {
+                              double distanceKm = 0.0;
+                              final loc = booking['location'];
+                              if (loc != null && _currentPosition != null) {
+                                distanceKm =
+                                    Geolocator.distanceBetween(
+                                      _currentPosition!.latitude,
+                                      _currentPosition!.longitude,
+                                      double.parse(loc['latitude'].toString()),
+                                      double.parse(loc['longitude'].toString()),
+                                    ) /
+                                    1000;
+                              }
+                              return Text(
+                                '${distanceKm.toStringAsFixed(1)} KM AWAY',
+                                style: TextStyle(
+                                  color: goldColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
                   Text(
                     service['name'] ?? 'Luxury Service',
                     textAlign: TextAlign.center,
@@ -394,16 +471,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   const Divider(color: Colors.white10),
                   const SizedBox(height: 20),
 
-                  // Customer & Location
-                  _buildModalRow(
-                    Icons.person_outline,
-                    'Client: ${customer['first_name']} ${customer['last_name']}',
-                    themeProvider,
-                  ),
-                  const SizedBox(height: 12),
+                  // Location
                   _buildModalRow(
                     Icons.location_on_outlined,
-                    booking['location']['address'],
+                    booking['location']?['address'] ?? 'No address provided',
                     themeProvider,
                   ),
 
@@ -419,7 +490,58 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
                   const SizedBox(height: 32),
 
-                  // Action Button
+                  // Action Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _showBookingDetails(booking);
+                          },
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: goldColor.withOpacity(0.5)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            'DETAILS',
+                            style: TextStyle(
+                              color: goldColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.redAccent),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'DECLINE',
+                            style: TextStyle(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Main Accept Button
                   Container(
                     width: double.infinity,
                     height: 54,
@@ -431,6 +553,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           goldColor,
                           const Color(0xFFFFD700),
                         ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
                       boxShadow: [
                         BoxShadow(
@@ -460,19 +584,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           fontSize: 14,
                           letterSpacing: 1.1,
                         ),
-                      ),
-                    ),
-                  ),
-
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      'DISMISS',
-                      style: TextStyle(
-                        color: themeProvider.textColor.withOpacity(0.5),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        letterSpacing: 1.1,
                       ),
                     ),
                   ),
@@ -623,6 +734,257 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     return await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
       timeLimit: const Duration(seconds: 15),
+    );
+  }
+
+  void _showBookingDetails(Map<String, dynamic> booking) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final goldColor = themeProvider.goldColor;
+    final customer = booking['customer'];
+    final service = booking['service'];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: BoxDecoration(
+          color: themeProvider.isDarkMode
+              ? const Color(0xFF121212)
+              : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'SESSION DETAILS',
+              style: TextStyle(
+                color: goldColor,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Divider(color: Colors.white10),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Client Info Card
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.03),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 30,
+                            backgroundImage:
+                                customer['profile_photo_url'] != null
+                                ? NetworkImage(
+                                    ApiService.normalizePhotoUrl(
+                                      customer['profile_photo_url'],
+                                    )!,
+                                  )
+                                : null,
+                            child: customer['profile_photo_url'] == null
+                                ? const Icon(Icons.person)
+                                : null,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${customer['first_name']} ${customer['last_name']}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const Text(
+                                  'Premium Client',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    _buildDetailSection(
+                      'SERVICE',
+                      service['name'] ?? 'Luxury Spa Treatment',
+                      Icons.spa,
+                    ),
+                    _buildDetailSection(
+                      'TOTAL PAYOUT',
+                      '₱${booking['total_amount']}',
+                      Icons.payments,
+                    ),
+                    Builder(
+                      builder: (context) {
+                        double distanceKm = 0.0;
+                        final loc = booking['location'];
+                        if (loc != null && _currentPosition != null) {
+                          distanceKm =
+                              Geolocator.distanceBetween(
+                                _currentPosition!.latitude,
+                                _currentPosition!.longitude,
+                                double.parse(loc['latitude'].toString()),
+                                double.parse(loc['longitude'].toString()),
+                              ) /
+                              1000;
+                        }
+                        return _buildDetailSection(
+                          'DISTANCE',
+                          '${distanceKm.toStringAsFixed(1)} KM AWAY',
+                          Icons.map_outlined,
+                        );
+                      },
+                    ),
+                    _buildDetailSection(
+                      'LOCATION',
+                      booking['location']?['address'] ?? 'Customer address',
+                      Icons.location_on,
+                    ),
+                    _buildDetailSection(
+                      'GENDER PREFERENCE',
+                      (booking['gender_preference'] ?? 'Any')
+                          .toString()
+                          .toUpperCase(),
+                      Icons.people_outline,
+                    ),
+                    _buildDetailSection(
+                      'MASSAGE INTENSITY',
+                      (booking['intensity_preference'] ?? 'Medium')
+                          .toString()
+                          .toUpperCase(),
+                      Icons.fitness_center_outlined,
+                    ),
+                    if (booking['customer_notes'] != null &&
+                        booking['customer_notes'].toString().isNotEmpty)
+                      _buildDetailSection(
+                        'SPECIAL NOTES',
+                        booking['customer_notes'],
+                        Icons.note_alt,
+                      ),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text(
+                        'CLOSE',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Container(
+                      height: 54,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [goldColor, const Color(0xFFFFD700)],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _acceptBooking(booking['id']);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: const Text(
+                          'ACCEPT NOW',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailSection(String label, String value, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: const Color(0xFFD4AF37), size: 22),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 10,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

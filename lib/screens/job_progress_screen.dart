@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
+import 'package:provider/provider.dart';
 import '../api_service.dart';
+import '../chat_provider.dart';
 import '../widgets/luxury_success_modal.dart';
 
 class JobProgressScreen extends StatefulWidget {
@@ -26,9 +28,13 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   late String _currentStatus;
   bool _isLoading = false;
   Timer? _locationTimer;
+  Timer? _chatRefreshTimer;
   late bool _isStoreBooking;
 
   late LatLng _clientLocation;
+  final TextEditingController _messageController = TextEditingController();
+  final ScrollController _chatScrollController = ScrollController();
+  int? _currentUserId;
 
   @override
   void initState() {
@@ -52,6 +58,72 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
       _startTracking();
     }
     _fetchLatestStatus();
+    _startChatPolling();
+    // Fetch initial chat messages and user ID
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (mounted) {
+        try {
+          final profile = await _apiService.getProfile(widget.token);
+          if (mounted) {
+            setState(() {
+              _currentUserId = profile['user']['id'];
+            });
+
+            // Initialize Echo for therapist
+            final user = profile['user'];
+            final providers = user?['providers'] as List?;
+            final providerId = (providers != null && providers.isNotEmpty)
+                ? providers[0]['id']
+                : null;
+
+            if (providerId != null) {
+              await _apiService.initEcho(widget.token, providerId);
+              // Start listening AFTER Echo is ready
+              _initializeRealTimeEvents();
+            }
+
+            Provider.of<ChatProvider>(
+              context,
+              listen: false,
+            ).fetchMessages(widget.booking['id'], widget.token);
+          }
+        } catch (e) {
+          debugPrint('Error fetching profile for chat: $e');
+        }
+      }
+    });
+  }
+
+  void _initializeRealTimeEvents() {
+    // Listen for Messages
+    _apiService.listenForBookingMessages(widget.booking['id'], (messageData) {
+      if (mounted) {
+        Provider.of<ChatProvider>(
+          context,
+          listen: false,
+        ).addMessage(messageData);
+        _scrollToBottom();
+      }
+    });
+
+    // Listen for Status Updates
+    _apiService.listenForBookingUpdates(widget.booking['id'], (bookingData) {
+      if (mounted) {
+        setState(() {
+          _currentStatus = bookingData['status'];
+        });
+      }
+    });
+  }
+
+  void _scrollToBottom() {
+    if (_chatScrollController.hasClients) {
+      _chatScrollController.animateTo(
+        _chatScrollController.position.maxScrollExtent + 100,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   Future<void> _fetchLatestStatus() async {
@@ -73,7 +145,21 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   @override
   void dispose() {
     _locationTimer?.cancel();
+    _chatRefreshTimer?.cancel();
+    _messageController.dispose();
+    _chatScrollController.dispose();
     super.dispose();
+  }
+
+  void _startChatPolling() {
+    _chatRefreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      if (mounted) {
+        Provider.of<ChatProvider>(
+          context,
+          listen: false,
+        ).fetchMessages(widget.booking['id'], widget.token);
+      }
+    });
   }
 
   void _startTracking() {
@@ -209,32 +295,186 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
             _buildDetailsView(goldColor),
 
           if (showMap)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1A1A1A),
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black54,
-                      blurRadius: 10,
-                      offset: Offset(0, -2),
+            DraggableScrollableSheet(
+              initialChildSize: 0.8,
+              minChildSize: 0.22,
+              maxChildSize: 0.9,
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A1A),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(30),
                     ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildInfoRow(),
-                    const SizedBox(height: 20),
-                    _buildActionButton(),
-                  ],
-                ),
-              ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.5),
+                        blurRadius: 20,
+                        offset: const Offset(0, -5),
+                      ),
+                    ],
+                  ),
+                  child: ListView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      // Handle
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Client Info & Status Row
+                      _buildInfoRow(),
+                      const SizedBox(height: 24),
+
+                      // Primary Action Button
+                      _buildActionButton(),
+                      const SizedBox(height: 32),
+
+                      const Divider(color: Colors.white10, height: 1),
+                      const SizedBox(height: 32),
+
+                      // Chat Section
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'CHAT WITH CLIENT',
+                            style: TextStyle(
+                              color: Color(0xFFD4AF37),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Text(
+                              'LIVE',
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Chat Area
+                      Consumer<ChatProvider>(
+                        builder: (context, chatProvider, child) {
+                          return Container(
+                            height: 350,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.black26,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.05),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: chatProvider.isLoading
+                                      ? const Center(
+                                          child: CircularProgressIndicator(
+                                            color: Color(0xFFD4AF37),
+                                          ),
+                                        )
+                                      : ListView.builder(
+                                          controller: _chatScrollController,
+                                          itemCount:
+                                              chatProvider.messages.length,
+                                          itemBuilder: (context, index) {
+                                            final msg =
+                                                chatProvider.messages[index];
+                                            final bool isMe =
+                                                msg.senderId == _currentUserId;
+                                            return _buildChatMessage(
+                                              msg.content,
+                                              isMe,
+                                            );
+                                          },
+                                        ),
+                                ),
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.05),
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _messageController,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                          ),
+                                          decoration: const InputDecoration(
+                                            hintText: 'Type a message...',
+                                            hintStyle: TextStyle(
+                                              color: Colors.white24,
+                                            ),
+                                            border: InputBorder.none,
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.send,
+                                          color: Color(0xFFD4AF37),
+                                          size: 20,
+                                        ),
+                                        onPressed: () {
+                                          if (_messageController
+                                              .text
+                                              .isNotEmpty) {
+                                            chatProvider.sendMessage(
+                                              widget.booking['id'],
+                                              widget.token,
+                                              _messageController.text,
+                                            );
+                                            _messageController.clear();
+                                            _scrollToBottom();
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 400),
+                    ],
+                  ),
+                );
+              },
             ),
           if (_isLoading)
             const Center(child: CircularProgressIndicator(color: goldColor)),
@@ -288,14 +528,19 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                   child: CircleAvatar(
                     radius: 50,
                     backgroundColor: Colors.grey[900],
-                    backgroundImage: customer['profile_photo_url'] != null
-                        ? NetworkImage(
-                            ApiService.normalizePhotoUrl(
+                    backgroundImage: () {
+                      final normalized = ApiService.normalizePhotoUrl(
+                        customer['profile_photo_url'],
+                      );
+                      return normalized != null
+                          ? NetworkImage(normalized)
+                          : null;
+                    }(),
+                    child:
+                        ApiService.normalizePhotoUrl(
                               customer['profile_photo_url'],
-                            )!,
-                          )
-                        : null,
-                    child: customer['profile_photo_url'] == null
+                            ) ==
+                            null
                         ? const Icon(
                             Icons.person,
                             size: 50,
@@ -573,6 +818,46 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
           text,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
         ),
+      ),
+    );
+  }
+
+  Widget _buildChatMessage(String text, bool isMe) {
+    const goldColor = Color(0xFFD4AF37);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: isMe
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            constraints: const BoxConstraints(maxWidth: 250),
+            decoration: BoxDecoration(
+              color: isMe ? goldColor : Colors.white.withOpacity(0.08),
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(16),
+                topRight: const Radius.circular(16),
+                bottomLeft: Radius.circular(isMe ? 16 : 0),
+                bottomRight: Radius.circular(isMe ? 0 : 16),
+              ),
+            ),
+            child: Text(
+              text,
+              style: TextStyle(
+                color: isMe ? Colors.black : Colors.white,
+                fontWeight: isMe ? FontWeight.bold : FontWeight.normal,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            isMe ? 'You' : 'Client',
+            style: const TextStyle(color: Colors.white24, fontSize: 10),
+          ),
+        ],
       ),
     );
   }

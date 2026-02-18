@@ -146,6 +146,30 @@ class ApiService {
     });
   }
 
+  void listenForBookingUpdates(
+    int bookingId,
+    Function(dynamic) onBookingUpdated,
+  ) {
+    if (_echo == null) return;
+
+    _echo!.private('booking.$bookingId').listen('.BookingStatusUpdated', (e) {
+      print('Real-time booking update received: $e');
+      onBookingUpdated(e['booking']);
+    });
+  }
+
+  void listenForBookingMessages(
+    int bookingId,
+    Function(dynamic) onMessageReceived,
+  ) {
+    if (_echo == null) return;
+
+    _echo!.private('booking.$bookingId').listen('.MessageSent', (e) {
+      print('Real-time message received: $e');
+      onMessageReceived(e['message']);
+    });
+  }
+
   void disconnectEcho() {
     _echo?.disconnect();
     _echo = null;
@@ -617,6 +641,55 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Profile Fetch Error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> getChatMessages(
+    int bookingId,
+    String token,
+  ) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/bookings/$bookingId/messages'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to load messages');
+      }
+    } catch (e) {
+      throw Exception('Chat Fetch Error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> sendChatMessage(
+    int bookingId,
+    String token,
+    String content,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/bookings/$bookingId/messages'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'content': content}),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to send message: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Chat Send Error: $e');
     }
   }
 }

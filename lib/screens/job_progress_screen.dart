@@ -111,10 +111,34 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
 
     // Listen for Status Updates
     _apiService.listenForBookingUpdates(widget.booking['id'], (bookingData) {
+      debugPrint('[REALTIME THERAPIST] Full Booking Data: $bookingData');
       if (mounted) {
         setState(() {
           _currentStatus = bookingData['status'];
+          // Sync updated booking data for timer refresh
+          if (bookingData['duration_minutes'] != null) {
+            widget.booking['duration_minutes'] =
+                bookingData['duration_minutes'];
+          }
+          if (bookingData['started_at'] != null) {
+            widget.booking['started_at'] = bookingData['started_at'];
+          }
         });
+
+        // Trigger timer refresh if in progress
+        if (_currentStatus == 'in_progress') {
+          final rawBooking = bookingData['duration_minutes'];
+          final rawService = bookingData['service']?['duration_minutes'];
+          debugPrint(
+            '[TIMER THERAPIST] Recalculating (Realtime) - rawBooking: $rawBooking, rawService: $rawService',
+          );
+          final raw = rawBooking ?? rawService;
+          final mins = raw is int
+              ? raw
+              : int.tryParse(raw?.toString() ?? '') ?? 60;
+          final startedAt = bookingData['started_at']?.toString();
+          _startCountdown(mins, startedAt: startedAt);
+        }
       }
     });
   }
@@ -136,14 +160,18 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         widget.token,
       );
       if (mounted) {
+        debugPrint('[POLL THERAPIST] Full Status Data: $data');
         setState(() {
           _currentStatus = data['booking_status'];
         });
         // If already in_progress (e.g. app restarted), sync timer from started_at
-        if (data['booking_status'] == 'in_progress' && !_timerStarted) {
+        if (data['booking_status'] == 'in_progress') {
           final booking = data['booking'] as Map<String, dynamic>?;
           final rawBooking = booking?['duration_minutes'];
           final rawService = booking?['service']?['duration_minutes'];
+          debugPrint(
+            '[TIMER THERAPIST] Recalculating (Poll) - rawBooking: $rawBooking, rawService: $rawService',
+          );
           final raw = rawBooking ?? rawService;
           final mins = raw is int
               ? raw
@@ -168,7 +196,9 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   }
 
   void _startCountdown(int durationMinutes, {String? startedAt}) {
-    if (_timerStarted) return;
+    debugPrint(
+      '[TIMER THERAPIST] Starting countdown: $durationMinutes mins, startedAt: $startedAt',
+    );
     final totalSeconds = durationMinutes * 60;
     int initialRemaining = totalSeconds;
 
@@ -177,9 +207,25 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
       try {
         final startTime = DateTime.parse(startedAt).toLocal();
         final elapsed = DateTime.now().difference(startTime).inSeconds;
+        debugPrint('[TIMER THERAPIST] Current Local Time: ${DateTime.now()}');
+        debugPrint('[TIMER THERAPIST] Parsed Start Time: $startTime');
+        debugPrint('[TIMER THERAPIST] Elapsed Seconds: $elapsed');
         initialRemaining = (totalSeconds - elapsed).clamp(0, totalSeconds);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[TIMER THERAPIST] Error parsing startedAt: $e');
+      }
     }
+
+    debugPrint('[TIMER THERAPIST] Final initialRemaining: $initialRemaining');
+
+    // Optimization: Only restart if something changed significantly
+    if (_timerStarted && (_remainingSeconds - initialRemaining).abs() < 5) {
+      debugPrint('[TIMER THERAPIST] Skipping restart - diff too small');
+      return;
+    }
+
+    debugPrint('[TIMER THERAPIST] Restarting timer now...');
+    _countdownTimer?.cancel();
 
     setState(() {
       _timerStarted = true;

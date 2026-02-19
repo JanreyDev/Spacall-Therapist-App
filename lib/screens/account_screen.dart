@@ -181,12 +181,16 @@ class _AccountScreenState extends State<AccountScreen> {
         : const Color(0xFFF5F5F5);
 
     final user = widget.userData['user'] ?? {};
+    final nickname = user['nickname'];
     final firstName = user['first_name'] ?? 'Therapist';
     final middleName = user['middle_name'] ?? '';
     final lastName = user['last_name'] ?? '';
     final fullName = middleName.isNotEmpty
         ? "$firstName $middleName $lastName"
         : (lastName.isNotEmpty ? "$firstName $lastName" : firstName);
+    final displayName = (nickname != null && nickname.toString().isNotEmpty)
+        ? nickname
+        : fullName;
     final email = user['email'] ?? 'No email provided';
     final phone = user['mobile_number'] ?? 'No phone provided';
     String? profileUrl = ApiService.normalizePhotoUrl(
@@ -273,7 +277,7 @@ class _AccountScreenState extends State<AccountScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          fullName,
+                          displayName,
                           style: TextStyle(
                             color: themeProvider.textColor,
                             fontSize: 28,

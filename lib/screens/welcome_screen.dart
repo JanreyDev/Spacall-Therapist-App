@@ -153,6 +153,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           _verificationStatus = isVerified ? 'verified' : 'pending';
 
           // _currency = user['currency'] ?? 'PHP';
+
+          // Auto-offline if balance falls below 1000
+          if (_walletBalance < 1000 && _isOnline) {
+            _isOnline = false;
+            _apiService.updateLocation(
+              token: widget.userData['token'],
+              latitude: _currentPosition?.latitude ?? 14.5995,
+              longitude: _currentPosition?.longitude ?? 120.9842,
+              isOnline: false,
+            );
+          }
         });
       }
     } catch (e) {
@@ -1075,14 +1086,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => LuxurySuccessModal(
-          isError: true,
-          title: 'ERROR',
-          message: 'Failed to update status: $e',
-          onConfirm: () => Navigator.of(context).pop(),
-        ),
+      _showLuxuryDialog(
+        e.toString().replaceAll("Exception:", "").trim(),
+        isError: true,
       );
       setState(() {
         _isUpdating = false;
@@ -1197,12 +1203,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final goldColor = themeProvider.goldColor;
     final textColor = themeProvider.textColor;
 
+    final nickname = user?['nickname'];
     final firstName = user?['first_name'] ?? "Therapist";
     final middleName = user?['middle_name'] ?? "";
     final lastName = user?['last_name'] ?? "";
-    final name = middleName.isNotEmpty
+    final fullName = middleName.isNotEmpty
         ? "$firstName $middleName $lastName"
         : (lastName.isNotEmpty ? "$firstName $lastName" : firstName);
+    final name = (nickname != null && nickname.toString().isNotEmpty)
+        ? nickname
+        : fullName;
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),

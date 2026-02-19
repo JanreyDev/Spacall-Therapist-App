@@ -20,36 +20,20 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
   final ImagePicker _picker = ImagePicker();
 
   int _currentStep = 0;
-  final int _totalSteps = 5;
+  final int _totalSteps = 4;
   bool _isLoading = false;
 
   // Form Controllers
   final TextEditingController _nicknameController = TextEditingController();
   final TextEditingController _ageController = TextEditingController();
-  final TextEditingController _addressController = TextEditingController();
   final TextEditingController _expController = TextEditingController();
   final TextEditingController _skillsController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
-
-  // Preferences
-  String _availability = 'Day'; // Day, Night, Both
-  String _intensity = 'Medium'; // Light, Medium, Hard
 
   // Gallery
   final List<XFile> _galleryImages = [];
 
   final Color goldColor = const Color(0xFFEBC14F);
-
-  void _nextStep() {
-    if (_currentStep < _totalSteps - 1) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    } else {
-      _submitApplication();
-    }
-  }
 
   void _prevStep() {
     if (_currentStep > 0) {
@@ -104,7 +88,7 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
         token: token,
         nickname: _nicknameController.text,
         age: int.tryParse(_ageController.text) ?? 18,
-        address: _addressController.text,
+        address: null, // Removed from UI as requested
         experience: int.tryParse(_expController.text) ?? 0,
         skills: _skillsController.text,
         bio: _bioController.text,
@@ -237,11 +221,10 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
               },
               physics: const NeverScrollableScrollPhysics(),
               children: [
-                _buildStep1(themeProvider),
-                _buildStep2(themeProvider),
-                _buildStep3(themeProvider),
-                _buildStep4(themeProvider),
-                _buildStep5(themeProvider),
+                _buildStep1(themeProvider), // Nickname & Age
+                _buildStep2(themeProvider), // Experience & Specialization
+                _buildStep3(themeProvider), // About
+                _buildStep4(themeProvider), // Photos
               ],
             ),
           ),
@@ -300,7 +283,7 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
           Padding(
             padding: const EdgeInsets.only(left: 4),
             child: Text(
-              "Note: Your nickname is the name that will be displayed on the front-end for clients.",
+              "Note: This will be your screen name (e.g., your professional alias).",
               style: TextStyle(
                 color: goldColor.withOpacity(0.6),
                 fontSize: 12,
@@ -313,7 +296,7 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
             "Age",
             _ageController,
             Icons.cake_outlined,
-            "Enter your age...",
+            "Enter your age (18-35 only)...",
             keyboardType: TextInputType.number,
           ),
         ],
@@ -322,29 +305,6 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
   }
 
   Widget _buildStep2(ThemeProvider themeProvider) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionHeader(
-            "Location Details",
-            "Tell us where you are based for service matching.",
-          ),
-          const SizedBox(height: 32),
-          _buildFormField(
-            "Address",
-            _addressController,
-            Icons.location_on_outlined,
-            "Enter your full address...",
-            maxLines: 3,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStep3(ThemeProvider themeProvider) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -364,13 +324,36 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
           ),
           const SizedBox(height: 24),
           _buildFormField(
-            "Specialized Skills",
+            "Specialization",
             _skillsController,
             Icons.star_outline,
             "e.g., Deep Tissue, Swedish, Sports...",
           ),
-          const SizedBox(height: 24),
-          _buildStaticCertPlaceholder(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep3(ThemeProvider themeProvider) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader(
+            "About",
+            "Provide a professional bio that will be visible to VIP clients.",
+          ),
+          const SizedBox(height: 32),
+          _buildFormField(
+            "About Me",
+            _bioController,
+            Icons.description_outlined,
+            "Description of yourself and your service...",
+            maxLines: 6,
+          ),
+          const SizedBox(height: 32),
+          _buildReviewCard(),
         ],
       ),
     );
@@ -383,56 +366,15 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildSectionHeader(
-            "Service Logistics",
-            "Specify your availability and show off your setup.",
+            "Portfolio Gallery",
+            "Please upload exactly 3 clear professional photos of yourself.",
           ),
           const SizedBox(height: 32),
-          _buildLabel("Work Availability"),
-          const SizedBox(height: 12),
-          _buildSelectionGroup(
-            ['Day', 'Night', 'Both'],
-            _availability,
-            (val) => setState(() => _availability = val),
-          ),
-          const SizedBox(height: 32),
-          _buildLabel("Preferred Session Intensity"),
-          const SizedBox(height: 12),
-          _buildSelectionGroup(
-            ['Light', 'Medium', 'Hard'],
-            _intensity,
-            (val) => setState(() => _intensity = val),
-          ),
-          const SizedBox(height: 40),
-          _buildLabel("Portfolio Gallery"),
+          _buildLabel("Upload 3 Photos"),
           const SizedBox(height: 16),
           _buildGalleryGrid(),
           const SizedBox(height: 24),
-          _buildAddImageButton(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStep5(ThemeProvider themeProvider) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionHeader(
-            "Final Step",
-            "Provide a professional bio that will be visible to VIP clients.",
-          ),
-          const SizedBox(height: 32),
-          _buildFormField(
-            "Professional Bio",
-            _bioController,
-            Icons.description_outlined,
-            "Start typing your journey...",
-            maxLines: 6,
-          ),
-          const SizedBox(height: 32),
-          _buildReviewCard(),
+          if (_galleryImages.length < 3) _buildAddImageButton(),
         ],
       ),
     );
@@ -564,45 +506,6 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
     );
   }
 
-  Widget _buildSelectionGroup(
-    List<String> options,
-    String current,
-    Function(String) onSelect,
-  ) {
-    return Row(
-      children: options.map((opt) {
-        bool isSelected = opt == current;
-        return Expanded(
-          child: GestureDetector(
-            onTap: () => onSelect(opt),
-            child: Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                color: isSelected ? goldColor.withOpacity(0.1) : Colors.white12,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isSelected ? goldColor : Colors.white12,
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  opt,
-                  style: TextStyle(
-                    color: isSelected ? goldColor : Colors.white54,
-                    fontWeight: isSelected
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
   Widget _buildFormField(
     String label,
     TextEditingController controller,
@@ -641,49 +544,68 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
     );
   }
 
-  Widget _buildStaticCertPlaceholder() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: goldColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(Icons.file_upload_outlined, color: goldColor),
+  void _nextStep() {
+    // Step 0: Nickname and Age Validation
+    if (_currentStep == 0) {
+      if (_nicknameController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a nickname')),
+        );
+        return;
+      }
+      final age = int.tryParse(_ageController.text) ?? 0;
+      if (age < 18 || age > 35) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Age must be between 18 and 35 years old'),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Certificates & Licenses",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  "You can upload these later in your profile.",
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.4),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
+        );
+        return;
+      }
+    }
+
+    // Step 1: Experience and Specialization
+    if (_currentStep == 1) {
+      if (_expController.text.isEmpty || _skillsController.text.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please fill in your experience and specialization'),
           ),
-        ],
-      ),
-    );
+        );
+        return;
+      }
+    }
+
+    // Step 2: About
+    if (_currentStep == 2) {
+      if (_bioController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please provide an "About" description'),
+          ),
+        );
+        return;
+      }
+    }
+
+    // Step 3: Photos (exactly 3)
+    if (_currentStep == 3) {
+      if (_galleryImages.length < 3) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please upload at least 3 photos')),
+        );
+        return;
+      }
+    }
+
+    if (_currentStep < _totalSteps - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      _submitApplication();
+    }
   }
 
   Widget _buildReviewCard() {

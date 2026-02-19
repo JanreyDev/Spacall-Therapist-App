@@ -403,7 +403,12 @@ class ApiService {
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {
-        throw Exception('Failed to update location: ${response.body}');
+        String msg = 'Failed to update location';
+        try {
+          final err = jsonDecode(response.body);
+          msg = err['message'] ?? msg;
+        } catch (_) {}
+        throw Exception(msg);
       }
     } catch (e) {
       throw Exception('Location Update Error: $e');
@@ -500,7 +505,7 @@ class ApiService {
     required String token,
     required String nickname,
     required int age,
-    required String address,
+    String? address,
     required int experience,
     required String skills,
     required String bio,

@@ -383,22 +383,20 @@ class ApiService {
     required String token,
     required double latitude,
     required double longitude,
-    bool isOnline = true,
+    bool? isOnline,
   }) async {
     try {
       final url = '$baseUrl/therapist/location';
-      print('Calling API: POST $url');
       final response = await http.post(
         Uri.parse(url),
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
           'Authorization': 'Bearer $token',
         },
         body: jsonEncode({
           'latitude': latitude,
           'longitude': longitude,
-          'is_online': isOnline,
+          if (isOnline != null) 'is_online': isOnline,
         }),
       );
 
@@ -409,6 +407,53 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Location Update Error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> deposit({
+    required String token,
+    required double amount,
+    required String method,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/wallet/deposit'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({'amount': amount, 'method': method}),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to deposit: ${response.body}');
+    }
+  }
+
+  Future<Map<String, dynamic>> withdraw({
+    required String token,
+    required double amount,
+    required String method,
+    required String accountDetails,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/wallet/withdraw'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'amount': amount,
+        'method': method,
+        'account_details': accountDetails,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to withdraw: ${response.body}');
     }
   }
 

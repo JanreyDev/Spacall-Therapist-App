@@ -35,6 +35,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   int _storeRequestCount = 0;
   Map<String, dynamic>? _ongoingBooking;
   Timer? _pollingTimer;
+  Timer? _monitorPaymentTimer;
   int _selectedIndex = 0;
   Position? _currentPosition;
   int? _lastNearbyBookingId;
@@ -651,6 +652,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             ).then((result) {
               if (result == 'switch_to_sessions') {
                 setState(() => _selectedIndex = 2);
+                _monitorPaymentRelease(bookingId);
               }
               _checkOngoingJob();
             });
@@ -1694,5 +1696,55 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         },
       ),
     );
+  }
+
+  void _monitorPaymentRelease(int bookingId) {
+    debugPrint("[PAYMENT MONITOR] Starting monitor for booking $bookingId");
+    _monitorPaymentTimer?.cancel();
+    int checks = 0;
+
+    _monitorPaymentTimer = Timer.periodic(const Duration(seconds: 5), (
+      timer,
+    ) async {
+      checks++;
+      if (checks > 60) {
+        // 5 minutes (300s / 5s = 60 checks)
+        timer.cancel();
+        return;
+      }
+
+      try {
+        final statusData = await _apiService.getBookingStatus(
+          bookingId,
+          widget.userData['token'],
+        );
+
+        final booking = statusData['booking'] ?? statusData;
+        final paymentStatus = booking['payment_status'];
+
+        debugPrint(
+          "[PAYMENT MONITOR] Booking $bookingId status: $paymentStatus",
+        );
+
+        if (paymentStatus == 'paid' || paymentStatus == 'released') {
+          timer.cancel();
+          if (mounted) {
+            showDialog(
+              context: context,
+              builder: (context) => LuxurySuccessModal(
+                title: "PAYMENT RECEIVED",
+                message:
+                    "Client has submitted their review and payment has been released to your wallet!",
+                onConfirm: () => Navigator.pop(context),
+              ),
+            );
+            _fetchProfile(); // Refresh wallet balance
+            _fetchDashboardStats();
+          }
+        }
+      } catch (e) {
+        debugPrint("[PAYMENT MONITOR] Error during payment check: $e");
+      }
+    });
   }
 }

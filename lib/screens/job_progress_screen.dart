@@ -2,10 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
+import 'dart:ui' as ui;
+import 'dart:typed_data';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:provider/provider.dart';
 import '../api_service.dart';
 import '../chat_provider.dart';
 import '../widgets/luxury_success_modal.dart';
+
+const goldColor = Color(0xFFD4AF37);
 
 class JobProgressScreen extends StatefulWidget {
   final Map<String, dynamic> booking;
@@ -38,6 +43,90 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   Timer? _countdownTimer;
   int _remainingSeconds = 0;
   bool _timerStarted = false;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _alertShown = false;
+  BitmapDescriptor? _clientMarkerIcon;
+  Set<Polyline> _polylines = {};
+
+  Future<void> _loadClientMarkerIcon() async {
+    final customer = widget.booking['customer'] ?? {};
+    final url = ApiService.normalizePhotoUrl(customer['profile_photo_url']);
+    if (url == null) return;
+
+    try {
+      final icon = await _createCircularMarkerIcon(url);
+      if (mounted) {
+        setState(() {
+          _clientMarkerIcon = icon;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading client marker icon: $e');
+    }
+  }
+
+  Future<BitmapDescriptor> _createCircularMarkerIcon(String url) async {
+    final Completer<ui.Image> completer = Completer();
+    final NetworkImage networkImage = NetworkImage(url);
+    final ImageStream stream = networkImage.resolve(ImageConfiguration.empty);
+
+    stream.addListener(
+      ImageStreamListener((ImageInfo info, bool _) {
+        completer.complete(info.image);
+      }),
+    );
+
+    final ui.Image image = await completer.future;
+
+    final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+    final Canvas canvas = Canvas(pictureRecorder);
+    const double size = 120.0;
+    const double radius = size / 2;
+
+    // Draw background circle (border)
+    final Paint borderPaint = Paint()
+      ..color = goldColor
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(radius, radius), radius, borderPaint);
+
+    // Draw inner circle for clipping
+    final Path clipPath = Path()
+      ..addOval(
+        Rect.fromCircle(
+          center: const Offset(radius, radius),
+          radius: radius - 4,
+        ),
+      );
+    canvas.clipPath(clipPath);
+
+    // Draw the image
+    final double imageWidth = image.width.toDouble();
+    final double imageHeight = image.height.toDouble();
+    final double scale =
+        size / (imageWidth < imageHeight ? imageWidth : imageHeight);
+    final double nw = imageWidth * scale;
+    final double nh = imageHeight * scale;
+    final double left = (size - nw) / 2;
+    final double top = (size - nh) / 2;
+
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, imageWidth, imageHeight),
+      Rect.fromLTWH(left, top, nw, nh),
+      Paint(),
+    );
+
+    final ui.Image markerImage = await pictureRecorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
+    final ByteData? byteData = await markerImage.toByteData(
+      format: ui.ImageByteFormat.png,
+    );
+    final Uint8List uint8List = byteData!.buffer.asUint8List();
+
+    return BitmapDescriptor.fromBytes(uint8List);
+  }
 
   @override
   void initState() {
@@ -62,6 +151,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     }
     _fetchLatestStatus();
     _startChatPolling();
+    _loadClientMarkerIcon();
     // Fetch initial chat messages and user ID
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted) {
@@ -192,6 +282,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     _countdownTimer?.cancel();
     _messageController.dispose();
     _chatScrollController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -239,11 +330,88 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
       setState(() {
         if (_remainingSeconds > 0) {
           _remainingSeconds--;
+
+          // 2-Minute Warning Logic (120 seconds)
+          // Window: 120 to 115 seconds
+          if (_remainingSeconds <= 120 &&
+              _remainingSeconds >= 115 &&
+              !_alertShown) {
+            _playAlert();
+            _showTwoMinuteWarningDialog();
+            _alertShown = true;
+          }
         } else {
+          // Timer finished - Auto-complete
+          if (mounted && _currentStatus == 'in_progress') {
+            _updateStatus('completed');
+          }
           timer.cancel();
         }
       });
     });
+  }
+
+  Future<void> _playAlert() async {
+    try {
+      // Loop sound 3 times
+      for (int i = 0; i < 3; i++) {
+        await _audioPlayer.play(
+          UrlSource(
+            'https://actions.google.com/sounds/v1/alarms/beep_short.ogg',
+          ),
+        );
+        await Future.delayed(const Duration(seconds: 1));
+      }
+    } catch (e) {
+      debugPrint("Error playing sound: $e");
+    }
+  }
+
+  void _showTwoMinuteWarningDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Row(
+          children: [
+            Icon(Icons.timer_outlined, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "2 Minutes Remaining",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          "The session has 2 minutes remaining. Please prepare to conclude.",
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              "OK",
+              style: TextStyle(
+                color: Color(0xFFD4AF37),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.redAccent),
+        ),
+      ),
+    );
   }
 
   String _formatCountdown(int totalSeconds) {
@@ -283,6 +451,10 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         setState(() {
           _currentPosition = LatLng(position.latitude, position.longitude);
         });
+
+        if (_currentStatus == 'en_route' || _currentStatus == 'accepted') {
+          _fetchRoute();
+        }
 
         // Update location on backend
         await _apiService.updateLocation(
@@ -353,10 +525,182 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     }
   }
 
+  Future<void> _fetchRoute() async {
+    if (_currentPosition == null) return;
+    if (_currentStatus != 'en_route' && _currentStatus != 'accepted') {
+      setState(() => _polylines = {});
+      return;
+    }
+
+    final points = await _apiService.getRoute(
+      _currentPosition!,
+      _clientLocation,
+    );
+
+    if (mounted && points.isNotEmpty) {
+      setState(() {
+        _polylines = {
+          Polyline(
+            polylineId: const PolylineId('route'),
+            points: points,
+            color: goldColor,
+            width: 5,
+            jointType: JointType.round,
+            startCap: Cap.roundCap,
+            endCap: Cap.roundCap,
+          ),
+        };
+      });
+    }
+  }
+
+  void _showChatModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: const BoxDecoration(
+          color: Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.chat_bubble_outline,
+                  color: goldColor,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'CHAT WITH CLIENT',
+                  style: TextStyle(
+                    color: goldColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2.0,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Divider(color: Colors.white10),
+            Expanded(
+              child: Consumer<ChatProvider>(
+                builder: (context, chatProvider, child) {
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: chatProvider.isLoading
+                            ? const Center(
+                                child: CircularProgressIndicator(
+                                  color: goldColor,
+                                ),
+                              )
+                            : ListView.builder(
+                                controller: _chatScrollController,
+                                padding: const EdgeInsets.all(24),
+                                itemCount: chatProvider.messages.length,
+                                itemBuilder: (context, index) {
+                                  final msg = chatProvider.messages[index];
+                                  final bool isMe =
+                                      msg.senderId == _currentUserId;
+                                  return _buildChatMessage(msg.content, isMe);
+                                },
+                              ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.only(
+                          left: 24,
+                          right: 24,
+                          top: 12,
+                          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.3),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(24),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _messageController,
+                                style: const TextStyle(color: Colors.white),
+                                decoration: InputDecoration(
+                                  hintText: 'Type a message...',
+                                  hintStyle: const TextStyle(
+                                    color: Colors.white24,
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.white.withOpacity(0.05),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 10,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Container(
+                              decoration: const BoxDecoration(
+                                color: goldColor,
+                                shape: BoxShape.circle,
+                              ),
+                              child: IconButton(
+                                icon: const Icon(
+                                  Icons.send,
+                                  color: Colors.black,
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  if (_messageController.text.isNotEmpty) {
+                                    chatProvider.sendMessage(
+                                      widget.booking['id'],
+                                      widget.token,
+                                      _messageController.text,
+                                    );
+                                    _messageController.clear();
+                                    _scrollToBottom();
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    const goldColor = Color(0xFFD4AF37);
-
     // If en_route, show Map. Otherwise (arrived, in_progress), show details.
     // ALWAYS hide map for store bookings
     bool showMap =
@@ -390,15 +734,8 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
               ),
               onMapCreated: (controller) => _mapController = controller,
               myLocationEnabled: true,
+              polylines: _polylines,
               markers: {
-                Marker(
-                  markerId: const MarkerId('client'),
-                  position: _clientLocation,
-                  infoWindow: const InfoWindow(title: 'Client Location'),
-                  icon: BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueAzure,
-                  ),
-                ),
                 if (_currentPosition != null)
                   Marker(
                     markerId: const MarkerId('therapist'),
@@ -408,192 +745,77 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                       BitmapDescriptor.hueYellow,
                     ),
                   ),
+                Marker(
+                  markerId: const MarkerId('client'),
+                  position: _clientLocation,
+                  infoWindow: const InfoWindow(title: 'Client Location'),
+                  icon:
+                      _clientMarkerIcon ??
+                      BitmapDescriptor.defaultMarkerWithHue(
+                        BitmapDescriptor.hueAzure,
+                      ),
+                ),
               },
             )
           else
             _buildDetailsView(goldColor),
 
           if (showMap)
-            DraggableScrollableSheet(
-              initialChildSize: 0.8,
-              minChildSize: 0.22,
-              maxChildSize: 0.9,
-              builder: (context, scrollController) {
-                return Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A1A1A),
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(30),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1A1A1A),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black54,
+                      blurRadius: 20,
+                      offset: Offset(0, -5),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.5),
-                        blurRadius: 20,
-                        offset: const Offset(0, -5),
-                      ),
-                    ],
-                  ),
-                  child: ListView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.all(24),
+                  ],
+                ),
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.85,
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Handle
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Client Info & Status Row
-                      _buildInfoRow(),
-                      const SizedBox(height: 24),
-
-                      // Primary Action Button
-                      _buildActionButton(),
-                      const SizedBox(height: 32),
-
-                      const Divider(color: Colors.white10, height: 1),
-                      const SizedBox(height: 32),
-
-                      // Chat Section
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'CHAT WITH CLIENT',
-                            style: TextStyle(
-                              color: Color(0xFFD4AF37),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Text(
-                              'LIVE',
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
+                          Expanded(child: _buildInfoRow()),
+                          const SizedBox(width: 12),
+                          // Chat Button
+                          IconButton(
+                            onPressed: _showChatModal,
+                            icon: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: goldColor.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: goldColor.withOpacity(0.3),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.chat_bubble_outline,
+                                color: goldColor,
+                                size: 20,
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-
-                      // Chat Area
-                      Consumer<ChatProvider>(
-                        builder: (context, chatProvider, child) {
-                          return Container(
-                            height: 350,
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.black26,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.05),
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Expanded(
-                                  child: chatProvider.isLoading
-                                      ? const Center(
-                                          child: CircularProgressIndicator(
-                                            color: Color(0xFFD4AF37),
-                                          ),
-                                        )
-                                      : ListView.builder(
-                                          controller: _chatScrollController,
-                                          itemCount:
-                                              chatProvider.messages.length,
-                                          itemBuilder: (context, index) {
-                                            final msg =
-                                                chatProvider.messages[index];
-                                            final bool isMe =
-                                                msg.senderId == _currentUserId;
-                                            return _buildChatMessage(
-                                              msg.content,
-                                              isMe,
-                                            );
-                                          },
-                                        ),
-                                ),
-                                const SizedBox(height: 12),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.05),
-                                    borderRadius: BorderRadius.circular(30),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: _messageController,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 14,
-                                          ),
-                                          decoration: const InputDecoration(
-                                            hintText: 'Type a message...',
-                                            hintStyle: TextStyle(
-                                              color: Colors.white24,
-                                            ),
-                                            border: InputBorder.none,
-                                          ),
-                                        ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.send,
-                                          color: Color(0xFFD4AF37),
-                                          size: 20,
-                                        ),
-                                        onPressed: () {
-                                          if (_messageController
-                                              .text
-                                              .isNotEmpty) {
-                                            chatProvider.sendMessage(
-                                              widget.booking['id'],
-                                              widget.token,
-                                              _messageController.text,
-                                            );
-                                            _messageController.clear();
-                                            _scrollToBottom();
-                                          }
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 400),
+                      const SizedBox(height: 24),
+                      _buildActionButton(),
                     ],
                   ),
-                );
-              },
+                ),
+              ),
             ),
           if (_isLoading)
             const Center(child: CircularProgressIndicator(color: goldColor)),
@@ -848,11 +1070,24 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
 
   Widget _buildInfoRow() {
     final customer = widget.booking['customer'] ?? {};
-    final location = widget.booking['location'] ?? {};
 
     return Row(
       children: [
-        const CircleAvatar(radius: 25, child: Icon(Icons.person)),
+        CircleAvatar(
+          radius: 28,
+          backgroundColor: goldColor,
+          backgroundImage: () {
+            final normalized = ApiService.normalizePhotoUrl(
+              customer['profile_photo_url'],
+            );
+            return normalized != null ? NetworkImage(normalized) : null;
+          }(),
+          child:
+              ApiService.normalizePhotoUrl(customer['profile_photo_url']) ==
+                  null
+              ? const Icon(Icons.person, color: Colors.black)
+              : null,
+        ),
         const SizedBox(width: 15),
         Expanded(
           child: Column(
@@ -870,29 +1105,15 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                 ),
               ),
               Text(
-                location['address'] ?? 'Client Location',
-                style: const TextStyle(color: Colors.white70, fontSize: 14),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                _getFriendlyStatus(),
+                style: TextStyle(
+                  color: goldColor.withOpacity(0.8),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
           ),
-        ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            const Text(
-              'STATUS',
-              style: TextStyle(color: Colors.grey, fontSize: 10),
-            ),
-            Text(
-              _currentStatus.toUpperCase(),
-              style: const TextStyle(
-                color: Color(0xFFD4AF37),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
         ),
       ],
     );
@@ -901,7 +1122,6 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   Widget _buildActionButton() {
     String text = '';
     String nextStatus = '';
-    const goldColor = Color(0xFFD4AF37);
 
     switch (_currentStatus) {
       case 'accepted':
@@ -952,7 +1172,6 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   }
 
   Widget _buildChatMessage(String text, bool isMe) {
-    const goldColor = Color(0xFFD4AF37);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Column(
@@ -992,7 +1211,6 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   }
 
   Widget _buildCountdownTimer() {
-    const goldColor = Color(0xFFD4AF37);
     final service = widget.booking['service'] ?? {};
     final rawBooking = widget.booking['duration_minutes'];
     final rawService = service['duration_minutes'];

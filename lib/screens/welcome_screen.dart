@@ -309,19 +309,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-
             // Header with Gradient
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -469,25 +459,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Divider(color: Colors.white10),
-                  const SizedBox(height: 20),
-
-                  // Location
-                  _buildModalRow(
-                    Icons.location_on_outlined,
-                    booking['location']?['address'] ?? 'No address provided',
-                    themeProvider,
-                  ),
-
-                  if (booking['customer_notes'] != null &&
-                      booking['customer_notes'].toString().isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _buildModalRow(
-                      Icons.note_alt_outlined,
-                      booking['customer_notes'],
-                      themeProvider,
-                    ),
-                  ],
 
                   const SizedBox(height: 32),
 
@@ -594,30 +565,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildModalRow(
-    IconData icon,
-    String text,
-    ThemeProvider themeProvider,
-  ) {
-    return Row(
-      children: [
-        Icon(icon, color: themeProvider.goldColor, size: 20),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(
-              color: themeProvider.textColor.withOpacity(0.7),
-              fontSize: 15,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
     );
   }
 

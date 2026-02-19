@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:laravel_echo/laravel_echo.dart';
 import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class PusherChannelWrapper {
   final String name;
@@ -812,5 +813,60 @@ class ApiService {
     } catch (e) {
       throw Exception('Support Send Error: $e');
     }
+  }
+
+  Future<List<LatLng>> getRoute(LatLng origin, LatLng destination) async {
+    const String apiKey = 'AIzaSyB0ufRgcg6WC7icyKzGUp7IeJmaciZVXFw';
+    final String url =
+        'https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=$apiKey';
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == 'OK') {
+          final String encodedPolyline =
+              data['routes'][0]['overview_polyline']['points'];
+          return _decodePolyline(encodedPolyline);
+        } else {
+          throw Exception('Directions API error: ${data['status']}');
+        }
+      } else {
+        throw Exception('Failed to fetch directions');
+      }
+    } catch (e) {
+      debugPrint('Error fetching directions: $e');
+      return [];
+    }
+  }
+
+  List<LatLng> _decodePolyline(String encoded) {
+    List<LatLng> points = [];
+    int index = 0, len = encoded.length;
+    int lat = 0, lng = 0;
+
+    while (index < len) {
+      int b, shift = 0, result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lng += dlng;
+
+      points.add(LatLng(lat / 1E5, lng / 1E5));
+    }
+    return points;
   }
 }

@@ -450,6 +450,43 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> submitVipApplication({
+    required String token,
+    required String nickname,
+    required int age,
+    required String address,
+    required int experience,
+    required String skills,
+    required String bio,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/therapist/apply-vip'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'nickname': nickname,
+          'age': age,
+          'address': address,
+          'experience': experience,
+          'skills': skills,
+          'bio': bio,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Application failed: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('VIP Application Error: $e');
+    }
+  }
+
   Future<Map<String, dynamic>> getDashboardStats(String token) async {
     try {
       final url = '$baseUrl/therapist/dashboard-stats';

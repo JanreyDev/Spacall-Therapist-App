@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'chat_provider.dart';
 import 'screens/animated_logo_screen.dart';
+import 'support_chat_provider.dart';
 import 'theme_provider.dart';
 
 void main() {
@@ -10,6 +11,7 @@ void main() {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
+        ChangeNotifierProvider(create: (_) => SupportChatProvider()),
       ],
       child: const MyApp(),
     ),

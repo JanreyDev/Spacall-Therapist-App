@@ -5,6 +5,7 @@ import 'package:pinput/pinput.dart';
 import '../api_service.dart';
 import '../theme_provider.dart';
 import 'login_screen.dart';
+import 'support_chat_screen.dart';
 
 class AccountScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -445,6 +446,15 @@ class _AccountScreenState extends State<AccountScreen> {
                   "Help & Support",
                   "FAQs & contact support",
                   themeProvider,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            SupportChatScreen(userData: widget.userData),
+                      ),
+                    );
+                  },
                 ),
                 _buildSettingItem(
                   Icons.info_outline,

@@ -170,6 +170,21 @@ class ApiService {
     });
   }
 
+  void listenForSupportMessages(
+    int sessionId,
+    Function(dynamic) onMessageReceived,
+  ) {
+    if (_echo == null) return;
+
+    print('Subscribing to support.session.$sessionId');
+    _echo!.private('support.session.$sessionId').listen('.SupportMessageSent', (
+      e,
+    ) {
+      print('Real-time support message received: $e');
+      onMessageReceived(e['message']);
+    });
+  }
+
   void disconnectEcho() {
     _echo?.disconnect();
     _echo = null;
@@ -690,6 +705,75 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Chat Send Error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> getSupportSession(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/support/session'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to get support session: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Support Session Error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> getSupportMessages(
+    String token,
+    int sessionId,
+  ) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/support/sessions/$sessionId/messages'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to load support messages');
+      }
+    } catch (e) {
+      throw Exception('Support Fetch Error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> sendSupportMessage(
+    String token,
+    int sessionId,
+    String content,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/support/sessions/$sessionId/messages'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'content': content}),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to send support message: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Support Send Error: $e');
     }
   }
 }

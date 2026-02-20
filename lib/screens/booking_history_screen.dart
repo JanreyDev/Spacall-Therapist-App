@@ -203,9 +203,16 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white12),
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: goldColor.withOpacity(0.3), width: 1.0),
+        boxShadow: [
+          BoxShadow(
+            color: goldColor.withOpacity(0.05),
+            blurRadius: 15,
+            spreadRadius: -5,
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -269,11 +276,20 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '₱${booking['total_amount']}',
+                NumberFormat.currency(symbol: '₱', decimalDigits: 2).format(
+                  double.tryParse(
+                        booking['total_amount']?.toString().replaceAll(
+                              RegExp(r'[^0-9.]'),
+                              '',
+                            ) ??
+                            '0',
+                      ) ??
+                      0,
+                ),
                 style: const TextStyle(
                   color: goldColor,
                   fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
               if (isCurrent)

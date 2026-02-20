@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../api_service.dart';
 import '../widgets/luxury_success_modal.dart';
 import 'job_progress_screen.dart';
@@ -150,9 +151,19 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
                   margin: const EdgeInsets.only(bottom: 20),
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
+                    color: const Color(0xFF1A1A1A),
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: goldColor.withOpacity(0.2)),
+                    border: Border.all(
+                      color: goldColor.withOpacity(0.5),
+                      width: 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: goldColor.withOpacity(0.05),
+                        blurRadius: 20,
+                        spreadRadius: -5,
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,10 +179,24 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
                             ),
                           ),
                           Text(
-                            '₱${booking['total_amount']}',
+                            NumberFormat.currency(
+                              symbol: '₱',
+                              decimalDigits: 2,
+                            ).format(
+                              double.tryParse(
+                                    booking['total_amount']
+                                            ?.toString()
+                                            .replaceAll(
+                                              RegExp(r'[^0-9.]'),
+                                              '',
+                                            ) ??
+                                        '0',
+                                  ) ??
+                                  0,
+                            ),
                             style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
                               color: goldColor,
                             ),
                           ),

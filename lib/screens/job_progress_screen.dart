@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../api_service.dart';
 import '../chat_provider.dart';
 import '../widgets/luxury_success_modal.dart';
@@ -781,7 +782,10 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                   maxHeight: MediaQuery.of(context).size.height * 0.85,
                 ),
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 32,
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -830,106 +834,114 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     final location = widget.booking['location'] ?? {};
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header Section - Centered Luxury Card with Action Button
+          // Backlit Royal Header
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
-              borderRadius: BorderRadius.circular(32),
-              border: Border.all(color: goldColor.withOpacity(0.2), width: 1),
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: goldColor.withOpacity(0.5), width: 1.0),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
+                  color: goldColor.withOpacity(0.05),
                   blurRadius: 20,
-                  offset: const Offset(0, 10),
+                  spreadRadius: -5,
                 ),
               ],
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Row(
               children: [
-                // Profile Picture with Glow
-                Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [goldColor, goldColor.withOpacity(0.5)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 78,
+                      height: 78,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: goldColor.withOpacity(0.2),
+                          width: 1,
+                        ),
+                      ),
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: goldColor.withOpacity(0.3),
-                        blurRadius: 20,
-                        spreadRadius: 2,
+                    CircleAvatar(
+                      radius: 35,
+                      backgroundColor: const Color(0xFF121212),
+                      backgroundImage: () {
+                        final normalized = ApiService.normalizePhotoUrl(
+                          customer['profile_photo_url'],
+                        );
+                        return normalized != null
+                            ? NetworkImage(normalized)
+                            : null;
+                      }(),
+                      child:
+                          ApiService.normalizePhotoUrl(
+                                customer['profile_photo_url'],
+                              ) ==
+                              null
+                          ? const Icon(
+                              Icons.person,
+                              size: 35,
+                              color: Colors.white,
+                            )
+                          : null,
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        customer['middle_name'] != null &&
+                                customer['middle_name'].toString().isNotEmpty
+                            ? '${customer['first_name']} ${customer['middle_name']} ${customer['last_name']}'
+                            : '${customer['first_name'] ?? 'Guest'} ${customer['last_name'] ?? ''}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: goldColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: goldColor.withOpacity(0.2)),
+                        ),
+                        child: Text(
+                          _getFriendlyStatus(),
+                          style: TextStyle(
+                            color: goldColor,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 7,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  child: CircleAvatar(
-                    radius: 45,
-                    backgroundColor: Colors.black,
-                    backgroundImage: () {
-                      final normalized = ApiService.normalizePhotoUrl(
-                        customer['profile_photo_url'],
-                      );
-                      return normalized != null
-                          ? NetworkImage(normalized)
-                          : null;
-                    }(),
-                    child:
-                        ApiService.normalizePhotoUrl(
-                              customer['profile_photo_url'],
-                            ) ==
-                            null
-                        ? const Icon(
-                            Icons.person,
-                            size: 40,
-                            color: Colors.white54,
-                          )
-                        : null,
-                  ),
                 ),
-                const SizedBox(height: 16),
-
-                // Name
-                Text(
-                  customer['middle_name'] != null &&
-                          customer['middle_name'].toString().isNotEmpty
-                      ? '${customer['first_name']} ${customer['middle_name']} ${customer['last_name']}'
-                      : '${customer['first_name'] ?? 'Guest'} ${customer['last_name'] ?? ''}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Friendly Status Text
-                Text(
-                  _getFriendlyStatus(),
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontWeight: FontWeight.w500,
-                    fontSize: 16,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Action Button INSIDE the card
-                SizedBox(width: double.infinity, child: _buildActionButton()),
               ],
             ),
           ),
+          const SizedBox(height: 24),
+          SizedBox(width: double.infinity, child: _buildActionButton()),
           const SizedBox(height: 32),
 
           // Countdown Timer (only when in_progress)
@@ -940,78 +952,139 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
 
           // Service Details Header
           Padding(
-            padding: const EdgeInsets.only(left: 8.0, bottom: 12),
-            child: Text(
-              'SERVICE DETAILS',
-              style: TextStyle(
-                color: goldColor,
-                fontSize: 11,
-                letterSpacing: 2.0,
-                fontWeight: FontWeight.w700,
-              ),
+            padding: EdgeInsets.zero,
+            child: Row(
+              children: [
+                Container(
+                  width: 2,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: goldColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'SERVICE DETAILS',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 10,
+                    letterSpacing: 2.0,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ),
 
-          // Service Details Card
+          // Service Details Card (Screenshot Style)
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E1E1E),
+              color: const Color(0xFF1E1E1E).withOpacity(0.5),
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: Colors.white.withOpacity(0.05)),
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildDetailItem(
-                  Icons.spa,
-                  'Service',
+                  Icons.spa_outlined,
+                  'Service Name',
                   service['name'] ?? 'Luxury Treatment',
                   goldColor,
                 ),
-                const Divider(color: Colors.white10, height: 32),
-                _buildDetailItem(Icons.access_time, 'Duration', () {
-                  final raw =
-                      widget.booking['duration_minutes'] ??
-                      service['duration_minutes'];
-                  final mins = raw is int
-                      ? raw
-                      : int.tryParse(raw?.toString() ?? '') ?? 60;
-                  return '$mins Minutes';
-                }(), goldColor),
-                const Divider(color: Colors.white10, height: 32),
-                if (widget.booking['scheduled_at'] != null) ...[
-                  _buildDetailItem(
-                    Icons.calendar_today,
-                    'Date & Time',
-                    _formatDate(widget.booking['scheduled_at']),
-                    goldColor,
-                  ),
-                  const Divider(color: Colors.white10, height: 32),
-                ],
-                _buildDetailItem(
-                  Icons.payments,
-                  'Amount Due',
-                  '₱${widget.booking['total_amount'] ?? '0.00'}',
-                  goldColor,
+                const Divider(color: Colors.white10, height: 28),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildDetailItem(
+                        Icons.calendar_today_outlined,
+                        'Schedule',
+                        _formatDate(
+                          widget.booking['scheduled_at'] ??
+                              widget.booking['created_at'],
+                        ),
+                        goldColor,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildDetailItem(
+                        Icons.access_time,
+                        'Duration',
+                        () {
+                          final raw =
+                              widget.booking['duration_minutes'] ??
+                              service['duration_minutes'];
+                          final mins = raw is int
+                              ? raw
+                              : int.tryParse(raw?.toString() ?? '') ?? 60;
+                          return '${mins}m';
+                        }(),
+                        goldColor,
+                      ),
+                    ),
+                  ],
                 ),
-                const Divider(color: Colors.white10, height: 32),
+                const Divider(color: Colors.white10, height: 28),
                 _buildDetailItem(
-                  Icons.location_on,
+                  Icons.location_on_outlined,
                   'Location',
                   location['address'] ?? 'Customer Location',
                   goldColor,
                 ),
-                if (widget.booking['customer_notes'] != null &&
-                    widget.booking['customer_notes'].toString().isNotEmpty) ...[
-                  const Divider(color: Colors.white10, height: 32),
-                  _buildDetailItem(
-                    Icons.menu,
-                    'Notes',
-                    widget.booking['customer_notes'],
-                    goldColor,
-                  ),
-                ],
+                const Divider(color: Colors.white10, height: 28),
+                _buildDetailItem(
+                  Icons.notes_rounded,
+                  'NOTES',
+                  widget.booking['customer_notes']?.toString().isNotEmpty ==
+                          true
+                      ? widget.booking['customer_notes']
+                      : 'No special instructions',
+                  goldColor,
+                ),
+                const Divider(color: Colors.white10, height: 28),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'TOTAL AMOUNT',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.3),
+                            fontSize: 10,
+                            letterSpacing: 1.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          NumberFormat.currency(
+                            symbol: '₱',
+                            decimalDigits: 2,
+                          ).format(
+                            double.tryParse(
+                                  widget.booking['total_amount']
+                                          ?.toString()
+                                          .replaceAll(RegExp(r'[^0-9.]'), '') ??
+                                      '0',
+                                ) ??
+                                0,
+                          ),
+                          style: TextStyle(
+                            color: goldColor,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -1067,41 +1140,32 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     String value,
     Color accentColor,
   ) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: accentColor.withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: accentColor, size: 20),
+        Row(
+          children: [
+            Icon(icon, size: 14, color: accentColor.withOpacity(0.5)),
+            const SizedBox(width: 8),
+            Text(
+              label.toUpperCase(),
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.3),
+                fontSize: 10,
+                letterSpacing: 1.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label.toUpperCase(),
-                style: const TextStyle(
-                  color: Colors.white38,
-                  fontSize: 10,
-                  letterSpacing: 1.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  height: 1.2,
-                ),
-              ),
-            ],
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            height: 1.2,
           ),
         ),
       ],
@@ -1251,123 +1315,54 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   }
 
   Widget _buildCountdownTimer() {
-    final service = widget.booking['service'] ?? {};
-    final rawBooking = widget.booking['duration_minutes'];
-    final rawService = service['duration_minutes'];
-    final rawDuration = rawBooking ?? rawService;
-    final durationMinutes = rawDuration is int
-        ? rawDuration
-        : int.tryParse(rawDuration?.toString() ?? '') ?? 60;
-    final totalSeconds = durationMinutes * 60;
     final isTimeUp = _remainingSeconds == 0 && _timerStarted;
-    final progress = totalSeconds > 0 ? _remainingSeconds / totalSeconds : 0.0;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: isTimeUp
-              ? Colors.red.withOpacity(0.5)
-              : goldColor.withOpacity(0.2),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isTimeUp
-                ? Colors.red.withOpacity(0.1)
-                : goldColor.withOpacity(0.05),
-            blurRadius: 20,
-            spreadRadius: 2,
-          ),
-        ],
+        color: const Color(0xFF1E1E1E).withOpacity(0.5),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: goldColor.withOpacity(0.1)),
       ),
       child: Column(
         children: [
-          Text(
-            'SESSION TIMER',
-            style: TextStyle(
-              color: goldColor.withOpacity(0.7),
-              fontSize: 11,
-              letterSpacing: 2.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: 160,
-            height: 160,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Background ring
-                SizedBox(
-                  width: 160,
-                  height: 160,
-                  child: CircularProgressIndicator(
-                    value: 1.0,
-                    strokeWidth: 8,
-                    color: Colors.white.withOpacity(0.05),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SESSION TIMER',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.3),
+                      fontSize: 10,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                // Progress ring
-                SizedBox(
-                  width: 160,
-                  height: 160,
-                  child: CircularProgressIndicator(
-                    value: progress.toDouble(),
-                    strokeWidth: 8,
-                    strokeCap: StrokeCap.round,
-                    color: isTimeUp ? Colors.red : goldColor,
+                  const SizedBox(height: 8),
+                  Text(
+                    isTimeUp
+                        ? "TIME'S UP"
+                        : _formatCountdown(_remainingSeconds),
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      color: isTimeUp ? Colors.redAccent : Colors.white,
+                      fontSize: 36,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1,
+                    ),
                   ),
-                ),
-                // Time display
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          isTimeUp
-                              ? "TIME'S\nUP"
-                              : _formatCountdown(_remainingSeconds),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: isTimeUp ? Colors.red : Colors.white,
-                            fontSize: isTimeUp ? 20 : 32,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: isTimeUp ? 1.0 : 2,
-                            height: 1.1,
-                          ),
-                        ),
-                      ),
-                      if (!isTimeUp)
-                        Text(
-                          'REMAINING',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.3),
-                            fontSize: 9,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            '$durationMinutes MIN SESSION',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.3),
-              fontSize: 11,
-              letterSpacing: 1.5,
-            ),
+                ],
+              ),
+              Icon(
+                Icons.hourglass_bottom_rounded,
+                color: isTimeUp ? Colors.redAccent : goldColor.withOpacity(0.5),
+                size: 32,
+              ),
+            ],
           ),
         ],
       ),

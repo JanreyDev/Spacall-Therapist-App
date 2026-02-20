@@ -489,7 +489,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '₱${booking['total_amount']}',
+                    NumberFormat.currency(symbol: '₱', decimalDigits: 2).format(
+                      double.tryParse(
+                            booking['total_amount']?.toString().replaceAll(
+                                  RegExp(r'[^0-9.]'),
+                                  '',
+                                ) ??
+                                '0',
+                          ) ??
+                          0,
+                    ),
                     style: TextStyle(
                       color: goldColor,
                       fontSize: 24,
@@ -829,7 +838,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     ),
                     _buildDetailSection(
                       'TOTAL PAYOUT',
-                      '₱${booking['total_amount']}',
+                      NumberFormat.currency(
+                        symbol: '₱',
+                        decimalDigits: 2,
+                      ).format(
+                        double.tryParse(
+                              booking['total_amount']?.toString().replaceAll(
+                                    RegExp(r'[^0-9.]'),
+                                    '',
+                                  ) ??
+                                  '0',
+                            ) ??
+                            0,
+                      ),
                       Icons.payments,
                     ),
                     Builder(
@@ -1507,9 +1528,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
+            color: const Color(0xFF1A1A1A),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.1)),
+            border: Border.all(color: goldColor.withOpacity(0.2)),
+            boxShadow: [
+              BoxShadow(
+                color: goldColor.withOpacity(0.05),
+                blurRadius: 10,
+                spreadRadius: -2,
+              ),
+            ],
           ),
           child: Column(
             children: [
@@ -2110,8 +2138,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 20,
+                    color: goldColor.withOpacity(0.1),
+                    blurRadius: 30,
+                    spreadRadius: -5,
                     offset: const Offset(0, 10),
                   ),
                 ],

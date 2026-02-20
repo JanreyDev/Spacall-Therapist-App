@@ -834,41 +834,46 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Section - Centered Luxury Card
+          // Header Section - Centered Luxury Card with Action Button
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
             decoration: BoxDecoration(
               color: const Color(0xFF1E1E1E),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFF3A3A3A), width: 1),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: goldColor.withOpacity(0.2), width: 1),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.5),
-                  blurRadius: 10,
-                  spreadRadius: 0,
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                // Profile Picture with Glow
                 Container(
-                  padding: const EdgeInsets.all(4),
+                  padding: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: goldColor,
+                    gradient: LinearGradient(
+                      colors: [goldColor, goldColor.withOpacity(0.5)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: goldColor.withOpacity(0.3),
-                        blurRadius: 15,
-                        spreadRadius: 5,
+                        blurRadius: 20,
+                        spreadRadius: 2,
                       ),
                     ],
                   ),
                   child: CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.grey[900],
+                    radius: 45,
+                    backgroundColor: Colors.black,
                     backgroundImage: () {
                       final normalized = ApiService.normalizePhotoUrl(
                         customer['profile_photo_url'],
@@ -884,13 +889,15 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                             null
                         ? const Icon(
                             Icons.person,
-                            size: 50,
+                            size: 40,
                             color: Colors.white54,
                           )
                         : null,
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+
+                // Name
                 Text(
                   customer['middle_name'] != null &&
                           customer['middle_name'].toString().isNotEmpty
@@ -899,96 +906,119 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 26,
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 0.5,
                   ),
                 ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: goldColor,
-                    borderRadius: BorderRadius.circular(25),
-                  ),
-                  child: Text(
-                    _getFriendlyStatus(),
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13,
-                      letterSpacing: 1.2,
-                    ),
+                const SizedBox(height: 8),
+
+                // Friendly Status Text
+                Text(
+                  _getFriendlyStatus(),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontWeight: FontWeight.w500,
+                    fontSize: 16,
+                    letterSpacing: 0.5,
                   ),
                 ),
+                const SizedBox(height: 24),
+
+                // Action Button INSIDE the card
+                SizedBox(width: double.infinity, child: _buildActionButton()),
               ],
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 32),
 
           // Countdown Timer (only when in_progress)
           if (_currentStatus == 'in_progress') ...[
             _buildCountdownTimer(),
-            const SizedBox(height: 30),
+            const SizedBox(height: 32),
           ],
 
-          Text(
-            'SERVICE DETAILS',
-            style: TextStyle(
-              color: const Color(0xFF505050),
-              fontSize: 11,
-              letterSpacing: 2.0,
-              fontWeight: FontWeight.w600,
+          // Service Details Header
+          Padding(
+            padding: const EdgeInsets.only(left: 8.0, bottom: 12),
+            child: Text(
+              'SERVICE DETAILS',
+              style: TextStyle(
+                color: goldColor,
+                fontSize: 11,
+                letterSpacing: 2.0,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-          _buildDetailItem(
-            Icons.spa,
-            'Service',
-            service['name'] ?? 'Luxury Treatment',
-          ),
-          _buildDetailItem(Icons.access_time, 'Duration', () {
-            final raw =
-                widget.booking['duration_minutes'] ??
-                service['duration_minutes'];
-            final mins = raw is int
-                ? raw
-                : int.tryParse(raw?.toString() ?? '') ?? 60;
-            return '$mins Minutes Session';
-          }()),
-          if (widget.booking['scheduled_at'] != null)
-            _buildDetailItem(
-              Icons.calendar_today,
-              'Scheduled',
-              _formatDate(widget.booking['scheduled_at']),
+
+          // Service Details Card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E1E),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withOpacity(0.05)),
             ),
-          _buildDetailItem(
-            Icons.payments,
-            'Amount Due',
-            '₱${widget.booking['total_amount'] ?? '0.00'}',
-          ),
-          _buildDetailItem(
-            Icons.location_on,
-            'Location',
-            location['address'] ?? 'Customer Location',
-          ),
-          if (widget.booking['customer_notes'] != null &&
-              widget.booking['customer_notes'].toString().isNotEmpty)
-            _buildDetailItem(
-              Icons.menu,
-              'Notes',
-              widget.booking['customer_notes'],
+            child: Column(
+              children: [
+                _buildDetailItem(
+                  Icons.spa,
+                  'Service',
+                  service['name'] ?? 'Luxury Treatment',
+                  goldColor,
+                ),
+                const Divider(color: Colors.white10, height: 32),
+                _buildDetailItem(Icons.access_time, 'Duration', () {
+                  final raw =
+                      widget.booking['duration_minutes'] ??
+                      service['duration_minutes'];
+                  final mins = raw is int
+                      ? raw
+                      : int.tryParse(raw?.toString() ?? '') ?? 60;
+                  return '$mins Minutes';
+                }(), goldColor),
+                const Divider(color: Colors.white10, height: 32),
+                if (widget.booking['scheduled_at'] != null) ...[
+                  _buildDetailItem(
+                    Icons.calendar_today,
+                    'Date & Time',
+                    _formatDate(widget.booking['scheduled_at']),
+                    goldColor,
+                  ),
+                  const Divider(color: Colors.white10, height: 32),
+                ],
+                _buildDetailItem(
+                  Icons.payments,
+                  'Amount Due',
+                  '₱${widget.booking['total_amount'] ?? '0.00'}',
+                  goldColor,
+                ),
+                const Divider(color: Colors.white10, height: 32),
+                _buildDetailItem(
+                  Icons.location_on,
+                  'Location',
+                  location['address'] ?? 'Customer Location',
+                  goldColor,
+                ),
+                if (widget.booking['customer_notes'] != null &&
+                    widget.booking['customer_notes'].toString().isNotEmpty) ...[
+                  const Divider(color: Colors.white10, height: 32),
+                  _buildDetailItem(
+                    Icons.menu,
+                    'Notes',
+                    widget.booking['customer_notes'],
+                    goldColor,
+                  ),
+                ],
+              ],
             ),
+          ),
 
           const SizedBox(height: 40),
 
-          // Control Buttons
-          _buildActionButton(),
-          const SizedBox(height: 16),
-          const SizedBox(height: 24),
+          // Back Button
           Center(
             child: TextButton(
               onPressed: () => Navigator.pop(context, 'switch_to_sessions'),
@@ -1002,6 +1032,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 40),
         ],
       ),
     );
@@ -1030,41 +1061,50 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     }
   }
 
-  Widget _buildDetailItem(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: const Color(0xFFD4AF37), size: 24),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label.toUpperCase(),
-                  style: const TextStyle(
-                    color: Color(0xFF4A4A4A),
-                    fontSize: 10,
-                    letterSpacing: 1.5,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
+  Widget _buildDetailItem(
+    IconData icon,
+    String label,
+    String value,
+    Color accentColor,
+  ) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: accentColor.withOpacity(0.1),
+            shape: BoxShape.circle,
           ),
-        ],
-      ),
+          child: Icon(icon, color: accentColor, size: 20),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label.toUpperCase(),
+                style: const TextStyle(
+                  color: Colors.white38,
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

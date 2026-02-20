@@ -7,6 +7,7 @@ import '../theme_provider.dart';
 import 'login_screen.dart';
 import 'support_chat_screen.dart';
 import 'vip_upgrade_screen.dart';
+import 'edit_profile_screen.dart';
 
 class AccountScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -429,6 +430,20 @@ class _AccountScreenState extends State<AccountScreen> {
                   "Edit Profile",
                   "Update your personal information",
                   themeProvider,
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            EditProfileScreen(userData: widget.userData),
+                      ),
+                    );
+                    if (result == true) {
+                      setState(() {
+                        // Triggers rebuild to reflect changes in widget.userData
+                      });
+                    }
+                  },
                 ),
                 _buildSettingItem(
                   Icons.phone,

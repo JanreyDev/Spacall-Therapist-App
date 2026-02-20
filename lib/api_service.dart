@@ -721,6 +721,63 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> updateUserProfile({
+    required String token,
+    String? firstName,
+    String? lastName,
+    String? nickname,
+    String? dateOfBirth,
+    String? email,
+    String? gender,
+    dynamic imageFile,
+  }) async {
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/auth/update-profile'),
+      );
+
+      request.headers['Authorization'] = 'Bearer $token';
+      request.headers['Accept'] = 'application/json';
+
+      if (firstName != null) request.fields['first_name'] = firstName;
+      if (lastName != null) request.fields['last_name'] = lastName;
+      if (nickname != null) request.fields['nickname'] = nickname;
+      if (dateOfBirth != null) request.fields['date_of_birth'] = dateOfBirth;
+      if (email != null) request.fields['email'] = email;
+      if (gender != null) request.fields['gender'] = gender;
+
+      if (imageFile != null) {
+        if (imageFile is String) {
+          request.files.add(
+            await http.MultipartFile.fromPath('image', imageFile),
+          );
+        } else {
+          request.files.add(
+            await http.MultipartFile.fromPath('image', imageFile.path),
+          );
+        }
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        dynamic error;
+        try {
+          error = jsonDecode(response.body);
+        } catch (_) {
+          throw Exception('Update failed (HTTP ${response.statusCode})');
+        }
+        throw Exception(error['message'] ?? 'Failed to update profile');
+      }
+    } catch (e) {
+      throw Exception('Update failed: $e');
+    }
+  }
+
   Future<Map<String, dynamic>> getProfile(String token) async {
     try {
       final url = '$baseUrl/therapist/profile';

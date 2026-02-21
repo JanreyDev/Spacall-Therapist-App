@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:pinput/pinput.dart';
 
+import '../widgets/safe_network_image.dart';
 import '../api_service.dart';
 import '../theme_provider.dart';
 import 'login_screen.dart';
 import 'support_chat_screen.dart';
-import 'vip_upgrade_screen.dart';
 import 'edit_profile_screen.dart';
+import 'vip_upgrade_screen.dart';
 
 class AccountScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -174,12 +175,7 @@ class _AccountScreenState extends State<AccountScreen> {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final goldColor = const Color(0xFFEBC14F);
-    final backgroundColor = themeProvider.isDarkMode
-        ? const Color(0xFF000000)
-        : Colors.white;
-    final cardColor = themeProvider.isDarkMode
-        ? const Color(0xFF1E1E1E) // Match therapist app card color
-        : const Color(0xFFF5F5F5);
+    final backgroundColor = Colors.black;
 
     final user = widget.userData['user'] ?? {};
     final nickname = user['nickname'];
@@ -192,7 +188,6 @@ class _AccountScreenState extends State<AccountScreen> {
     final displayName = (nickname != null && nickname.toString().isNotEmpty)
         ? nickname
         : fullName;
-    final email = user['email'] ?? 'No email provided';
     final phone = user['mobile_number'] ?? 'No phone provided';
     String? profileUrl = ApiService.normalizePhotoUrl(
       user['profile_photo_url'],
@@ -215,33 +210,55 @@ class _AccountScreenState extends State<AccountScreen> {
                 child: Column(
                   children: [
                     Stack(
+                      alignment: Alignment.center,
                       children: [
+                        // Outer Glow
                         Container(
-                          padding: const EdgeInsets.all(4),
+                          width: 140,
+                          height: 140,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: goldColor, width: 2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: goldColor.withOpacity(0.1),
+                                blurRadius: 30,
+                                spreadRadius: 10,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [
+                                goldColor,
+                                goldColor.withOpacity(0.2),
+                                goldColor.withOpacity(0.5),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
                           ),
                           child: Container(
                             width: 120,
                             height: 120,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: cardColor,
+                              color: Colors.black,
+                              border: Border.all(color: Colors.black, width: 2),
                             ),
                             child: ClipOval(
                               child: profileUrl != null && profileUrl.isNotEmpty
-                                  ? Image.network(
-                                      profileUrl,
+                                  ? SafeNetworkImage(
+                                      url: profileUrl,
                                       fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (context, error, stackTrace) {
-                                            return Icon(
-                                              Icons.person,
-                                              size: 60,
-                                              color: goldColor,
-                                            );
-                                          },
+                                      errorWidget: Icon(
+                                        Icons.person,
+                                        size: 60,
+                                        color: goldColor,
+                                      ),
                                     )
                                   : Icon(
                                       Icons.person,
@@ -251,9 +268,9 @@ class _AccountScreenState extends State<AccountScreen> {
                             ),
                           ),
                         ),
-                        PositionImage(
-                          bottom: 0,
-                          right: 0,
+                        Positioned(
+                          bottom: 5,
+                          right: 5,
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
@@ -261,12 +278,18 @@ class _AccountScreenState extends State<AccountScreen> {
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: backgroundColor,
-                                width: 2,
+                                width: 3,
                               ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 5,
+                                ),
+                              ],
                             ),
                             child: const Icon(
-                              Icons.edit,
-                              size: 16,
+                              Icons.edit_outlined,
+                              size: 14,
                               color: Colors.black,
                             ),
                           ),
@@ -308,118 +331,197 @@ class _AccountScreenState extends State<AccountScreen> {
                           ),
                         ),
                       ),
-                    const SizedBox(height: 4),
-                    Text(
-                      email != 'No email provided' ? email : phone,
-                      style: TextStyle(
-                        color: themeProvider.textColor.withOpacity(0.5),
-                        fontSize: 16,
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: goldColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: goldColor.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            tier == 'vip' ? Icons.star : Icons.person_outline,
+                            color: goldColor,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            tier.toUpperCase(),
+                            style: TextStyle(
+                              color: goldColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 32),
                   ],
                 ),
               ),
 
-              if (tier != 'vip' && !_isUpgradePending) ...[
-                const SizedBox(height: 32),
+              // JOIN VIP Promo Banner (Only if not VIP)
+              if (tier != 'vip' && !_isUpgradePending)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
+                    width: double.infinity,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E1E1E),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: goldColor.withOpacity(0.3)),
+                      borderRadius: BorderRadius.circular(24),
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFF1A1A1A),
+                          const Color(0xFF2A2A2A),
+                          goldColor.withOpacity(0.1),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      border: Border.all(
+                        color: goldColor.withOpacity(0.3),
+                        width: 1,
+                      ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
+                          color: goldColor.withOpacity(0.05),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
                         ),
                       ],
                     ),
-                    child: Row(
+                    child: Stack(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: goldColor.withOpacity(0.1),
-                            shape: BoxShape.circle,
+                        // Decorative Background Icon
+                        Positioned(
+                          right: -20,
+                          top: -20,
+                          child: Icon(
+                            Icons.diamond_rounded,
+                            size: 120,
+                            color: goldColor.withOpacity(0.05),
                           ),
-                          child: Icon(Icons.star, color: goldColor, size: 22),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
+                        Padding(
+                          padding: const EdgeInsets.all(24),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                "Upgrade to VIP",
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: goldColor,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      "PRESTIGE",
+                                      style: TextStyle(
+                                        color: Colors.black,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                "UPGRADE TO VIP",
                                 style: TextStyle(
-                                  color: goldColor,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
+                              const SizedBox(height: 8),
                               Text(
-                                "Unlock premium features",
+                                "Unlock higher service fees, priority placement, and exclusive rewards.",
                                 style: TextStyle(
-                                  color: themeProvider.textColor.withOpacity(
-                                    0.5,
+                                  color: Colors.white.withOpacity(0.6),
+                                  fontSize: 13,
+                                  height: 1.4,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 50,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(14),
+                                    gradient: const LinearGradient(
+                                      colors: [
+                                        Color(0xFFB8860B),
+                                        Color(0xFFFFD700),
+                                        Color(0xFFD4AF37),
+                                      ],
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: goldColor.withOpacity(0.3),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
                                   ),
-                                  fontSize: 12,
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      shadowColor: Colors.transparent,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                    ),
+                                    onPressed: () async {
+                                      final result = await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              VipUpgradeScreen(
+                                                userData: widget.userData,
+                                              ),
+                                        ),
+                                      );
+
+                                      if (result == true) {
+                                        setState(() {
+                                          _isUpgradePending = true;
+                                        });
+                                      }
+                                    },
+                                    child: const Text(
+                                      "APPLY NOW",
+                                      style: TextStyle(
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 14,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
-                          ),
-                        ),
-                        ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    VipUpgradeScreen(userData: widget.userData),
-                              ),
-                            ).then((value) {
-                              // If we want to refresh state after returning
-                              if (value == true) {
-                                setState(() {
-                                  _isUpgradePending = true;
-                                });
-                              }
-                            });
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: goldColor,
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: const Text(
-                            "APPLY",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-              ],
 
               const SizedBox(height: 40),
 
@@ -455,21 +557,6 @@ class _AccountScreenState extends State<AccountScreen> {
                   Icons.work_outline,
                   "Service Area",
                   "Manage your service location",
-                  themeProvider,
-                ),
-              ], themeProvider),
-
-              _buildSection("Preferences", [
-                _buildSettingItem(
-                  Icons.settings,
-                  "App Settings",
-                  "Notifications, language, privacy",
-                  themeProvider,
-                ),
-                _buildSettingItem(
-                  Icons.notifications,
-                  "Notifications",
-                  "Manage alerts & reminders",
                   themeProvider,
                 ),
               ], themeProvider),
@@ -536,28 +623,48 @@ class _AccountScreenState extends State<AccountScreen> {
     ThemeProvider themeProvider, {
     Color? titleColor,
   }) {
+    final goldColor = const Color(0xFFEBC14F);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
           child: Text(
-            title,
+            title.toUpperCase(),
             style: TextStyle(
-              color: titleColor ?? const Color(0xFFEBC14F),
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
+              color: titleColor ?? goldColor.withOpacity(0.5),
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 2,
             ),
           ),
         ),
         Container(
-          margin: const EdgeInsets.symmetric(horizontal: 0),
+          margin: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
-            color: themeProvider.isDarkMode
-                ? const Color(0xFF1E1E1E) // Match dashboard card color
-                : const Color(0xFFF9F9F9),
+            color: const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: goldColor.withOpacity(0.1)),
           ),
-          child: Column(children: items),
+          child: Column(
+            children: items.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final item = entry.value;
+              return Column(
+                children: [
+                  item,
+                  if (idx < items.length - 1)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Divider(
+                        color: goldColor.withOpacity(0.05),
+                        height: 1,
+                      ),
+                    ),
+                ],
+              );
+            }).toList(),
+          ),
         ),
       ],
     );
@@ -636,32 +743,4 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   // VIP Upgrade Screen now handles the form and submission.
-}
-
-class PositionImage extends StatelessWidget {
-  final Widget child;
-  final double? top;
-  final double? bottom;
-  final double? left;
-  final double? right;
-
-  const PositionImage({
-    super.key,
-    required this.child,
-    this.top,
-    this.bottom,
-    this.left,
-    this.right,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      top: top,
-      bottom: bottom,
-      left: left,
-      right: right,
-      child: child,
-    );
-  }
 }

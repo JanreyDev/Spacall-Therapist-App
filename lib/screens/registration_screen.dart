@@ -7,6 +7,7 @@ import 'welcome_screen.dart';
 import 'spacall_camera_screen.dart';
 import 'package:geolocator/geolocator.dart';
 import '../api_service.dart';
+import '../widgets/luxury_error_modal.dart';
 
 class RegistrationScreen extends StatefulWidget {
   final String mobileNumber;
@@ -1131,6 +1132,17 @@ class _RegistrationScreenState extends State<RegistrationScreen>
   }
 
   void _showLuxuryDialog(String message, {bool isError = false}) {
+    if (isError) {
+      showDialog(
+        context: context,
+        builder: (context) => LuxuryErrorModal(
+          title: "ERROR",
+          message: message,
+          onConfirm: () => Navigator.pop(context),
+        ),
+      );
+      return;
+    }
     showDialog(
       context: context,
       barrierDismissible: !isError,

@@ -4,6 +4,7 @@ import 'package:pinput/pinput.dart';
 import '../api_service.dart';
 import 'otp_screen.dart';
 import 'welcome_screen.dart';
+import '../widgets/luxury_error_modal.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -89,11 +90,18 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     } catch (e) {
-      if (!mounted) return;
-      _showLuxuryDialog(
-        e.toString().replaceAll('Exception: ', ''),
-        isError: true,
-      );
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => LuxuryErrorModal(
+            title: "ACCESS DENIED",
+            message:
+                "The security PIN you entered is incorrect. Please double-check and try again.",
+            onConfirm: () => Navigator.pop(context),
+          ),
+        );
+      }
+      _pinController.clear();
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -621,6 +629,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _showLuxuryDialog(String message, {bool isError = false}) {
+    if (isError) {
+      showDialog(
+        context: context,
+        builder: (context) => LuxuryErrorModal(
+          title: "ERROR",
+          message: message,
+          onConfirm: () => Navigator.pop(context),
+        ),
+      );
+      return;
+    }
     const goldColor = Color(0xFFD4AF37);
     showDialog(
       context: context,

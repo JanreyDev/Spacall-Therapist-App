@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../api_service.dart';
 import '../chat_provider.dart';
 import '../widgets/luxury_success_modal.dart';
+import '../widgets/luxury_error_modal.dart';
 
 const goldColor = Color(0xFFD4AF37);
 
@@ -516,8 +517,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
       setState(() => _isLoading = false);
       showDialog(
         context: context,
-        builder: (context) => LuxurySuccessModal(
-          isError: true,
+        builder: (context) => LuxuryErrorModal(
           title: 'ERROR',
           message: e.toString().replaceAll('Exception: ', ''),
           onConfirm: () => Navigator.of(context).pop(),

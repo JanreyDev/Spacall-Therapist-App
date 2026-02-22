@@ -9,6 +9,7 @@ import 'login_screen.dart';
 import 'support_chat_screen.dart';
 import 'edit_profile_screen.dart';
 import 'vip_upgrade_screen.dart';
+import '../widgets/luxury_error_modal.dart';
 
 class AccountScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -125,18 +126,23 @@ class _AccountScreenState extends State<AccountScreen> {
                       );
                     } catch (e) {
                       setDialogState(() => _isProcessing = false);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(e.toString()),
-                          backgroundColor: Colors.red,
+                      showDialog(
+                        context: context,
+                        builder: (context) => LuxuryErrorModal(
+                          title: "ERROR",
+                          message: e.toString().replaceAll('Exception: ', ''),
+                          onConfirm: () => Navigator.pop(context),
                         ),
                       );
                     }
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Incorrect PIN"),
-                        backgroundColor: Colors.red,
+                    showDialog(
+                      context: context,
+                      builder: (context) => LuxuryErrorModal(
+                        title: "VERIFICATION FAILED",
+                        message:
+                            "The security PIN you entered is incorrect. Please double-check and try again.",
+                        onConfirm: () => Navigator.pop(context),
                       ),
                     );
                     pinController.clear();

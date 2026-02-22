@@ -842,16 +842,20 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
           // Backlit Royal Header
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A1A1A),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: goldColor.withOpacity(0.5), width: 1.0),
+              gradient: LinearGradient(
+                colors: [const Color(0xFF1E1E1E), const Color(0xFF121212)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: goldColor.withOpacity(0.12), width: 1),
               boxShadow: [
                 BoxShadow(
-                  color: goldColor.withOpacity(0.05),
-                  blurRadius: 20,
-                  spreadRadius: -5,
+                  color: goldColor.withOpacity(0.04),
+                  blurRadius: 40,
+                  spreadRadius: 2,
                 ),
               ],
             ),
@@ -1253,23 +1257,46 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         return const SizedBox.shrink();
     }
 
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      height: 55,
+      height: 58,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          colors: [
+            goldColor.withOpacity(0.8),
+            goldColor,
+            goldColor.withOpacity(0.9),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: goldColor.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+            spreadRadius: -2,
+          ),
+        ],
+      ),
       child: ElevatedButton(
         onPressed: () => _updateStatus(nextStatus),
         style: ElevatedButton.styleFrom(
-          backgroundColor: goldColor,
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
           foregroundColor: Colors.black,
-          elevation: 10,
-          shadowColor: goldColor.withOpacity(0.5),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(18),
           ),
         ),
         child: Text(
           text,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.5,
+          ),
         ),
       ),
     );
@@ -1319,50 +1346,62 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E).withOpacity(0.5),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: goldColor.withOpacity(0.1)),
+        color: const Color(0xFF121212),
+        borderRadius: BorderRadius.circular(32),
+        border: Border.all(color: goldColor.withOpacity(0.15), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: isTimeUp
+                ? Colors.redAccent.withOpacity(0.05)
+                : goldColor.withOpacity(0.03),
+            blurRadius: 30,
+            spreadRadius: 5,
+          ),
+        ],
       ),
-      child: Column(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'SESSION TIMER',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.3),
-                      fontSize: 10,
-                      letterSpacing: 1.2,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    isTimeUp
-                        ? "TIME'S UP"
-                        : _formatCountdown(_remainingSeconds),
-                    style: TextStyle(
-                      fontFamily: 'monospace',
-                      color: isTimeUp ? Colors.redAccent : Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -1,
-                    ),
-                  ),
-                ],
+              Text(
+                'TIME REMAINING',
+                style: TextStyle(
+                  color: goldColor.withOpacity(0.4),
+                  fontSize: 11,
+                  letterSpacing: 2.5,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-              Icon(
-                Icons.hourglass_bottom_rounded,
-                color: isTimeUp ? Colors.redAccent : goldColor.withOpacity(0.5),
-                size: 32,
+              const SizedBox(height: 12),
+              Text(
+                isTimeUp ? "TIME'S UP" : _formatCountdown(_remainingSeconds),
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  color: isTimeUp ? Colors.redAccent : Colors.white,
+                  fontSize: 42,
+                  fontWeight: FontWeight.w200, // Thinner for modern luxury look
+                  letterSpacing: -1,
+                ),
               ),
             ],
+          ),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: (isTimeUp ? Colors.redAccent : goldColor).withOpacity(
+                0.05,
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isTimeUp ? Icons.timer_off_outlined : Icons.timer_outlined,
+              color: isTimeUp ? Colors.redAccent : goldColor,
+              size: 28,
+            ),
           ),
         ],
       ),

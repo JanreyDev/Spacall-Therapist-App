@@ -61,8 +61,6 @@ class _OtpScreenState extends State<OtpScreen> {
 
       if (!mounted) return;
 
-      _showLuxuryDialog('Account Verified Successfully');
-
       if (response['next_step'] == 'dashboard') {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('last_mobile_number', widget.mobileNumber);

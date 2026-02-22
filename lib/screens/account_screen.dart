@@ -189,13 +189,23 @@ class _AccountScreenState extends State<AccountScreen> {
         ? nickname
         : fullName;
     final phone = user['mobile_number'] ?? 'No phone provided';
+    final email = user['email'] ?? 'No email provided';
     String? profileUrl = ApiService.normalizePhotoUrl(
       user['profile_photo_url'],
     );
-    // Therapist app might not have 'customer_tier', handling gracefully
-    final tier = (user['therapist_tier'] ?? 'standard')
+    // Use customer_tier as the source of truth, fallback to therapist_tier
+    final tier = (user['customer_tier'] ?? user['therapist_tier'] ?? 'standard')
         .toString()
         .toLowerCase();
+
+    // Support real-time pending status from API data
+    final provider = widget.userData['provider'] ?? user['provider'] ?? {};
+    final therapistProfile = provider['therapist_profile'] ?? {};
+    final vipStatus = (therapistProfile['vip_status'] ?? '')
+        .toString()
+        .toLowerCase();
+    final isActuallyPending = _isUpgradePending || vipStatus == 'pending';
+    final isVip = tier == 'vip' || vipStatus == 'approved';
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -310,7 +320,7 @@ class _AccountScreenState extends State<AccountScreen> {
                         ),
                         const SizedBox(width: 8),
                         Icon(
-                          _isUpgradePending
+                          isActuallyPending
                               ? Icons.hourglass_empty
                               : Icons.verified,
                           color: goldColor,
@@ -318,7 +328,16 @@ class _AccountScreenState extends State<AccountScreen> {
                         ),
                       ],
                     ),
-                    if (_isUpgradePending)
+                    const SizedBox(height: 4),
+                    Text(
+                      phone,
+                      style: TextStyle(
+                        color: themeProvider.textColor.withOpacity(0.5),
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (isActuallyPending)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
@@ -333,31 +352,55 @@ class _AccountScreenState extends State<AccountScreen> {
                       ),
                     const SizedBox(height: 20),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isVip ? 20 : 16,
+                        vertical: isVip ? 10 : 6,
                       ),
                       decoration: BoxDecoration(
-                        color: goldColor.withOpacity(0.1),
+                        color: isVip ? null : goldColor.withOpacity(0.1),
+                        gradient: isVip
+                            ? const LinearGradient(
+                                colors: [
+                                  Color(0xFFB8860B),
+                                  Color(0xFFD4AF37),
+                                  Color(0xFFFFD700),
+                                ],
+                              )
+                            : null,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: goldColor.withOpacity(0.3)),
+                        border: isVip
+                            ? null
+                            : Border.all(color: goldColor.withOpacity(0.3)),
+                        boxShadow: isVip
+                            ? [
+                                BoxShadow(
+                                  color: goldColor.withOpacity(0.3),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ]
+                            : null,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            tier == 'vip' ? Icons.star : Icons.person_outline,
-                            color: goldColor,
-                            size: 14,
+                            isVip ? Icons.star : Icons.person_outline,
+                            color: isVip ? Colors.black : goldColor,
+                            size: isVip ? 18 : 14,
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           Text(
-                            tier.toUpperCase(),
+                            isVip
+                                ? "VIP ACCOUNT"
+                                : (tier == 'store'
+                                      ? "STORE ACCOUNT"
+                                      : "STANDARD ACCOUNT"),
                             style: TextStyle(
-                              color: goldColor,
-                              fontSize: 10,
+                              color: isVip ? Colors.black : goldColor,
+                              fontSize: isVip ? 14 : 10,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: 1.2,
+                              letterSpacing: isVip ? 0.5 : 1.2,
                             ),
                           ),
                         ],
@@ -369,7 +412,7 @@ class _AccountScreenState extends State<AccountScreen> {
               ),
 
               // JOIN VIP Promo Banner (Only if not VIP)
-              if (tier != 'vip' && !_isUpgradePending)
+              if (!isVip && !isActuallyPending)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Container(
@@ -554,9 +597,9 @@ class _AccountScreenState extends State<AccountScreen> {
                   themeProvider,
                 ),
                 _buildSettingItem(
-                  Icons.work_outline,
-                  "Service Area",
-                  "Manage your service location",
+                  Icons.email,
+                  "Email Address",
+                  email,
                   themeProvider,
                 ),
               ], themeProvider),

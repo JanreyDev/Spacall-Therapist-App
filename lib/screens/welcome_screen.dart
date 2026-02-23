@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
 import '../api_service.dart';
 import '../theme_provider.dart';
 import 'consolidated_requests_screen.dart';
@@ -50,6 +51,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   int _sessions = 0;
   String _rating = '5.0';
   double _earningsToday = 0.0;
+  List<dynamic> _transactions = [];
+  bool _isTransactionsLoading = true;
   // Store specific
 
   int get _totalRequestCount =>
@@ -81,6 +84,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     if (widget.userData['user']?['customer_tier'] == 'store') {
       _checkStoreRequests();
     }
+    _fetchTransactions();
     // Auto-online on login
     _toggleOnline(true);
     _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
@@ -93,6 +97,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         if (widget.userData['user']?['customer_tier'] == 'store') {
           _checkStoreRequests();
         }
+        _fetchTransactions();
         _updateLiveLocation();
       }
     });
@@ -168,6 +173,27 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       }
     } catch (e) {
       print('Error fetching profile: $e');
+    }
+  }
+
+  Future<void> _fetchTransactions() async {
+    try {
+      final transactions = await _apiService.getTransactions(
+        widget.userData['token'],
+      );
+      if (mounted) {
+        setState(() {
+          _transactions = transactions;
+          _isTransactionsLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching transactions: $e');
+      if (mounted) {
+        setState(() {
+          _isTransactionsLoading = false;
+        });
+      }
     }
   }
 
@@ -2211,7 +2237,194 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             ),
           ),
         ),
+        const SizedBox(height: 32),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "RECENT TRANSACTIONS",
+              style: TextStyle(
+                color: goldColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+              ),
+            ),
+            if (!_isTransactionsLoading && _transactions.isNotEmpty)
+              Text(
+                "SEE ALL",
+                style: TextStyle(
+                  color: goldColor.withOpacity(0.5),
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _isTransactionsLoading
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: CircularProgressIndicator(color: Color(0xFFD4AF37)),
+                ),
+              )
+            : _transactions.isEmpty
+            ? Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withOpacity(0.05)),
+                ),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.receipt_long_outlined,
+                        color: Colors.white.withOpacity(0.2),
+                        size: 40,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        "No transactions yet",
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.3),
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            : ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: _transactions.length > 5 ? 5 : _transactions.length,
+                itemBuilder: (context, index) {
+                  final tx = _transactions[index];
+                  return _buildTransactionCard(tx, themeProvider, goldColor);
+                },
+              ),
+        const SizedBox(height: 100),
       ],
+    );
+  }
+
+  Widget _buildTransactionCard(
+    Map<String, dynamic> tx,
+    ThemeProvider themeProvider,
+    Color goldColor,
+  ) {
+    final type = tx['type']?.toString().toLowerCase() ?? '';
+    final status = tx['status']?.toString().toLowerCase() ?? '';
+    final amount = double.tryParse(tx['amount']?.toString() ?? '0') ?? 0.0;
+    final createdAt =
+        DateTime.tryParse(tx['created_at'] ?? '') ?? DateTime.now();
+    final dateStr = DateFormat('MMM dd, yyyy • hh:mm a').format(createdAt);
+
+    bool isCredit = true;
+    IconData icon = Icons.payment;
+    String title = 'Transaction';
+
+    if (type == 'deposit') {
+      title = 'Wallet Top-up';
+      icon = Icons.add_circle_outline;
+      isCredit = true;
+    } else if (type == 'withdrawal') {
+      title = 'Wallet Withdrawal';
+      icon = Icons.remove_circle_outline;
+      isCredit = false;
+    } else if (type == 'booking') {
+      title = 'Session Payment';
+      icon = Icons.spa_outlined;
+      isCredit = true; // For therapist, booking is credit!
+    }
+
+    // Use meta description if available
+    if (tx['meta'] != null) {
+      try {
+        final meta = tx['meta'] is String ? jsonDecode(tx['meta']) : tx['meta'];
+        if (meta['description'] != null) {
+          title = meta['description'];
+        }
+      } catch (e) {
+        // Ignore JSON parse errors
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: goldColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: goldColor, size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  dateStr,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.4),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                "${isCredit ? '+' : '-'} ₱${NumberFormat('#,##0.00', 'en_US').format(amount.abs())}",
+                style: TextStyle(
+                  color: isCredit ? Colors.greenAccent : Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (status != 'completed')
+                Text(
+                  status.toUpperCase(),
+                  style: TextStyle(
+                    color: status == 'pending' ? Colors.orange : Colors.red,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -2281,6 +2494,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               ),
             );
             _fetchProfile(); // Refresh wallet balance
+            _fetchTransactions(); // Refresh transactions
             _fetchDashboardStats();
           }
         }

@@ -976,4 +976,18 @@ class ApiService {
     }
     return points;
   }
+
+  Future<List<dynamic>> getTransactions(String token) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/wallet/transactions'),
+      headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['transactions'] ?? [];
+    } else {
+      throw Exception('Failed to fetch transactions');
+    }
+  }
 }

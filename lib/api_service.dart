@@ -104,8 +104,8 @@ class ApiService {
         apiKey: 'spacallkey',
         cluster: 'mt1',
         useTLS: true,
-        host: 'api.spacall.ph',
-        wssPort: 443,
+        // host: 'api.spacall.ph',
+        // wssPort: 443,
         onEvent: (event) {
           echoClient.handleEvent(event);
         },

@@ -85,7 +85,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       if (!mounted) return;
       _apiService.listenForBookings(providerId, (booking) {
         if (!mounted) return;
-        _checkActiveRequests();
+        debugPrint('[WelcomeScreen] 🔔 REAL-TIME BookingRequested received!');
+        // Mark this booking as already seen so polling doesn't re-notify
+        if (booking is Map<String, dynamic> && booking['id'] != null) {
+          _lastDirectBookingId = booking['id'];
+        }
+        // Refresh the request count in the background
+        _checkActiveRequests(suppressNotification: true);
+        // Show the notification IMMEDIATELY from the WebSocket payload
         _showBookingNotification(booking, isDirect: true);
       });
       debugPrint(
@@ -112,7 +119,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     _fetchTransactions();
     // Auto-online on login
     _toggleOnline(true);
-    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (_isOnline) {
         _fetchProfile();
         _fetchDashboardStats(); // Periodic fetch
@@ -241,7 +248,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     }
   }
 
-  Future<void> _checkActiveRequests() async {
+  Future<void> _checkActiveRequests({bool suppressNotification = false}) async {
     try {
       final response = await _apiService.getActiveRequests(
         token: widget.userData['token'],
@@ -249,7 +256,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       );
       final List<dynamic> requests = response['bookings'] ?? [];
 
-      if (requests.isNotEmpty) {
+      if (!suppressNotification && requests.isNotEmpty) {
         final latestBooking = requests.first;
         final latestId = latestBooking['id'];
 

@@ -76,10 +76,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     if (provider == null && widget.userData['user'] != null) {
       provider = widget.userData['user']['provider'];
     }
-    if (provider == null || provider['id'] == null) return;
+
+    debugPrint('[WS] userData keys: ${widget.userData.keys.toList()}');
+    debugPrint('[WS] provider from userData: $provider');
+
+    if (provider == null || provider['id'] == null) {
+      debugPrint(
+        '[WS] ❌ Provider is null — WebSocket NOT initialized! Relying on polling only.',
+      );
+      return;
+    }
 
     final providerId = provider['id'];
     final token = widget.userData['token'];
+    debugPrint('[WS] ✅ Starting WebSocket for provider ID: $providerId');
 
     _apiService.initEcho(token, providerId).then((_) {
       if (!mounted) return;

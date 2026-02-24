@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
@@ -27,22 +28,49 @@ class _PusherManager {
       port: 443,
     );
 
+    debugPrint('[Pusher] WebSocket URI: ${options.uri}');
+
+    // Completer that resolves once the WebSocket is actually connected
+    final connectionCompleter = Completer<void>();
+
     _client = PusherChannelsClient.websocket(
       options: options,
       connectionErrorHandler: (exception, trace, reconnect) {
-        debugPrint('[Pusher] Connection error: $exception');
+        debugPrint('[Pusher] ❌ Connection error: $exception');
+        if (!connectionCompleter.isCompleted) {
+          connectionCompleter.completeError(exception);
+        }
+        debugPrint('[Pusher] Attempting reconnect in 2 seconds...');
+        Future.delayed(const Duration(seconds: 2), () {
+          reconnect();
+        });
       },
     );
 
     _client!.onConnectionEstablished.listen((_) {
-      debugPrint('[Pusher] Connected. Re-subscribing channels.');
+      debugPrint(
+        '[Pusher] ✅ Connected! Re-subscribing ${_channels.length} channels.',
+      );
+      // Complete once so init() can return
+      if (!connectionCompleter.isCompleted) {
+        connectionCompleter.complete();
+      }
+      // Re-subscribe any channels that were registered before reconnect
       for (final ch in _channels.values) {
-        ch.subscribeIfNotUnsubscribed();
+        ch.subscribe();
       }
     });
 
     _client!.connect();
-    debugPrint('[Pusher] Connecting to api.spacall.ph...');
+    debugPrint('[Pusher] 🔄 Connecting to api.spacall.ph...');
+
+    // Wait for connection before returning so callers can safely subscribe channels
+    await connectionCompleter.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        debugPrint('[Pusher] ⚠️ Connection timeout — proceeding anyway');
+      },
+    );
   }
 
   /// Subscribe to a private channel (e.g. 'booking.123') and

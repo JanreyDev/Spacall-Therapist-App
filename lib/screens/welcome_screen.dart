@@ -63,9 +63,34 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     super.initState();
     print("WelcomeScreen initialized - Dynamic Dashboard");
     _startPolling();
+    // Initialize WebSocket immediately — do NOT wait for GPS/toggleOnline
+    _initRealtimeListeners();
     // Check for waiver acceptance
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) _checkWaiver();
+    });
+  }
+
+  void _initRealtimeListeners() {
+    var provider = widget.userData['provider'];
+    if (provider == null && widget.userData['user'] != null) {
+      provider = widget.userData['user']['provider'];
+    }
+    if (provider == null || provider['id'] == null) return;
+
+    final providerId = provider['id'];
+    final token = widget.userData['token'];
+
+    _apiService.initEcho(token, providerId).then((_) {
+      if (!mounted) return;
+      _apiService.listenForBookings(providerId, (booking) {
+        if (!mounted) return;
+        _checkActiveRequests();
+        _showBookingNotification(booking, isDirect: true);
+      });
+      debugPrint(
+        '[WelcomeScreen] Real-time listener active for provider $providerId',
+      );
     });
   }
 
@@ -755,7 +780,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
     return await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
-      timeLimit: const Duration(seconds: 15),
+      timeLimit: const Duration(seconds: 5),
     );
   }
 
@@ -1109,25 +1134,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       });
 
       if (value) {
-        // Defensive: Check top level, then nested in user
-        var provider = widget.userData['provider'];
-        if (provider == null && widget.userData['user'] != null) {
-          provider = widget.userData['user']['provider'];
-        }
-
-        if (provider == null || provider['id'] == null) {
-          throw Exception(
-            'Therapist profile not found. Please log out and back in.',
-          );
-        }
-
-        final providerId = provider['id'];
-        await _apiService.initEcho(widget.userData['token'], providerId);
-        _apiService.listenForBookings(providerId, (booking) {
-          _checkActiveRequests();
-          if (!mounted) return;
-          _showBookingNotification(booking, isDirect: true);
-        });
+        // WebSocket is already initialized in initState/_initRealtimeListeners.
+        // No need to re-init here — just ensure connection is live.
+        debugPrint(
+          '[WelcomeScreen] Therapist went online — WebSocket already connected.',
+        );
       } else {
         _apiService.disconnectEcho();
       }

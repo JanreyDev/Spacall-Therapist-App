@@ -2,63 +2,95 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:laravel_echo/laravel_echo.dart';
-import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
+import 'package:dart_pusher_channels/dart_pusher_channels.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-class PusherChannelWrapper {
-  final String name;
-  final Map<String, List<Function(dynamic)>> _bindings = {};
+/// Manages Pusher connections directly via dart_pusher_channels.
+/// No laravel_echo wrapper — events are pure Dart streams.
+class _PusherManager {
+  PusherChannelsClient? _client;
+  final Map<String, Channel> _channels = {};
+  String? _token;
+  String? _authUrl;
 
-  PusherChannelWrapper(this.name);
+  bool get isConnected => _client != null;
 
-  void bind(String event, Function callback) {
-    if (!_bindings.containsKey(event)) {
-      _bindings[event] = [];
-    }
-    _bindings[event]!.add((data) => callback(data));
-  }
+  Future<void> init({required String token, required String authUrl}) async {
+    if (_client != null) return;
+    _token = token;
+    _authUrl = authUrl;
 
-  void unbind(String event) {
-    _bindings.remove(event);
-  }
+    final options = PusherChannelsOptions.fromHost(
+      scheme: 'wss',
+      host: 'api.spacall.ph',
+      key: 'spacallkey',
+      port: 443,
+    );
 
-  void handleEvent(String event, dynamic data) {
-    if (_bindings.containsKey(event)) {
-      for (var callback in _bindings[event]!) {
-        callback(data);
+    _client = PusherChannelsClient.websocket(
+      options: options,
+      connectionErrorHandler: (exception, trace, reconnect) {
+        debugPrint('[Pusher] Connection error: $exception');
+      },
+    );
+
+    _client!.onConnectionEstablished.listen((_) {
+      debugPrint('[Pusher] Connected. Re-subscribing channels.');
+      for (final ch in _channels.values) {
+        ch.subscribeIfNotUnsubscribed();
       }
-    }
-  }
-}
+    });
 
-class EchoPusherClient {
-  final PusherChannelsFlutter pusher;
-  final Map<String, PusherChannelWrapper> channels = {};
-
-  EchoPusherClient(this.pusher);
-
-  void disconnect() => pusher.disconnect();
-
-  Future<void> connect() => pusher.connect();
-
-  PusherChannelWrapper subscribe(String channelName) {
-    pusher.subscribe(channelName: channelName);
-    if (!channels.containsKey(channelName)) {
-      channels[channelName] = PusherChannelWrapper(channelName);
-    }
-    return channels[channelName]!;
+    _client!.connect();
+    debugPrint('[Pusher] Connecting to api.spacall.ph...');
   }
 
-  void unsubscribe(String channelName) {
-    pusher.unsubscribe(channelName: channelName);
-    channels.remove(channelName);
+  /// Subscribe to a private channel (e.g. 'booking.123') and
+  /// listen for [eventName] (e.g. 'MessageSent'). Returns a stream.
+  Stream<Map<String, dynamic>> privateChannel(
+    String channelName,
+    String eventName,
+  ) {
+    assert(_client != null, 'Call init() before listening to channels');
+    final fullName = 'private-$channelName';
+    if (!_channels.containsKey(fullName)) {
+      final ch = _client!.privateChannel(
+        fullName,
+        authorizationDelegate:
+            EndpointAuthorizableChannelTokenAuthorizationDelegate.forPrivateChannel(
+              authorizationEndpoint: Uri.parse(_authUrl!),
+              headers: {
+                'Authorization': 'Bearer $_token',
+                'Accept': 'application/json',
+              },
+            ),
+      );
+      _channels[fullName] = ch;
+      ch.subscribe();
+      debugPrint('[Pusher] Subscribed to $fullName');
+    }
+
+    return _channels[fullName]!.bind(eventName).map((event) {
+      final raw = event.data;
+      if (raw == null) return <String, dynamic>{};
+      if (raw is Map<String, dynamic>) return raw;
+      try {
+        return Map<String, dynamic>.from(jsonDecode(raw.toString()));
+      } catch (_) {
+        return <String, dynamic>{'raw': raw};
+      }
+    });
   }
 
-  void handleEvent(PusherEvent event) {
-    if (channels.containsKey(event.channelName)) {
-      channels[event.channelName]!.handleEvent(event.eventName, event.data);
+  void disconnect() {
+    for (final ch in _channels.values) {
+      ch.unsubscribe();
     }
+    _channels.clear();
+    _client?.disconnect();
+    _client = null;
+    _token = null;
+    _authUrl = null;
   }
 }
 
@@ -90,60 +122,22 @@ class ApiService {
     return 'https://api.spacall.ph$path';
   }
 
-  Echo? _echo;
+  final _PusherManager _pusher = _PusherManager();
 
   Future<void> initEcho(String token, int providerId) async {
-    if (_echo != null) return;
-
-    final pusher = PusherChannelsFlutter.getInstance();
-
-    final echoClient = EchoPusherClient(pusher);
-
-    try {
-      await pusher.init(
-        apiKey: 'spacallkey',
-        cluster: 'mt1',
-        useTLS: true,
-        // host: 'api.spacall.ph',
-        // wssPort: 443,
-        onEvent: (event) {
-          echoClient.handleEvent(event);
-        },
-        onAuthorizer: (channelName, socketId, options) async {
-          final authUrl =
-              '${baseUrl.replaceFirst(RegExp(r'/api$'), '')}/broadcasting/auth';
-          final response = await http.post(
-            Uri.parse(authUrl),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode({
-              'socket_id': socketId,
-              'channel_name': channelName,
-            }),
-          );
-          return jsonDecode(response.body);
-        },
-      );
-    } catch (e) {
-      print("Pusher init error: $e");
-    }
-
-    await pusher.connect();
-
-    _echo = Echo(client: echoClient, broadcaster: EchoBroadcasterType.Pusher);
-
-    print('Echo initialized for therapist.$providerId');
+    if (_pusher.isConnected) return;
+    final authUrl =
+        '${baseUrl.replaceFirst(RegExp(r'/api$'), '')}/broadcasting/auth';
+    await _pusher.init(token: token, authUrl: authUrl);
+    debugPrint('[Pusher] Echo initialized for provider $providerId');
   }
 
   void listenForBookings(int providerId, Function(dynamic) onBookingReceived) {
-    if (_echo == null) return;
-
-    _echo!.private('therapist.$providerId').listen('.BookingRequested', (e) {
-      print('Real-time booking received: $e');
-      onBookingReceived(e['booking']);
+    _pusher.privateChannel('therapist.$providerId', 'BookingRequested').listen((
+      data,
+    ) {
+      debugPrint('[Pusher] BookingRequested: $data');
+      onBookingReceived(data['booking'] ?? data);
     });
   }
 
@@ -151,23 +145,21 @@ class ApiService {
     int bookingId,
     Function(dynamic) onBookingUpdated,
   ) {
-    if (_echo == null) return;
-
-    _echo!.private('booking.$bookingId').listen('.BookingStatusUpdated', (e) {
-      print('Real-time booking update received: $e');
-      onBookingUpdated(e['booking']);
-    });
+    _pusher.privateChannel('booking.$bookingId', 'BookingStatusUpdated').listen(
+      (data) {
+        debugPrint('[Pusher] BookingStatusUpdated: $data');
+        onBookingUpdated(data['booking'] ?? data);
+      },
+    );
   }
 
   void listenForBookingMessages(
     int bookingId,
     Function(dynamic) onMessageReceived,
   ) {
-    if (_echo == null) return;
-
-    _echo!.private('booking.$bookingId').listen('.MessageSent', (e) {
-      print('Real-time message received: $e');
-      onMessageReceived(e['message']);
+    _pusher.privateChannel('booking.$bookingId', 'MessageSent').listen((data) {
+      debugPrint('[Pusher] MessageSent: $data');
+      onMessageReceived(data['message'] ?? data);
     });
   }
 
@@ -175,20 +167,31 @@ class ApiService {
     int sessionId,
     Function(dynamic) onMessageReceived,
   ) {
-    if (_echo == null) return;
+    _pusher
+        .privateChannel('support.session.$sessionId', 'SupportMessageSent')
+        .listen((data) {
+          debugPrint('[Pusher] SupportMessageSent: $data');
+          onMessageReceived(data['message'] ?? data);
+        });
+  }
 
-    print('Subscribing to support.session.$sessionId');
-    _echo!.private('support.session.$sessionId').listen('.SupportMessageSent', (
-      e,
-    ) {
-      print('Real-time support message received: $e');
-      onMessageReceived(e['message']);
-    });
+  void listenForUserNotifications(
+    int userId,
+    Function(dynamic) onNotificationReceived,
+  ) {
+    _pusher
+        .privateChannel(
+          'App.Models.User.$userId',
+          'Illuminate\\Notifications\\Events\\BroadcastNotificationCreated',
+        )
+        .listen((data) {
+          debugPrint('[Pusher] Notification: $data');
+          onNotificationReceived(data);
+        });
   }
 
   void disconnectEcho() {
-    _echo?.disconnect();
-    _echo = null;
+    _pusher.disconnect();
   }
 
   Future<Map<String, dynamic>> loginEntry(String mobileNumber) async {

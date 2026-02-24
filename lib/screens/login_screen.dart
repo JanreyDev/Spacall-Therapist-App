@@ -5,6 +5,7 @@ import '../api_service.dart';
 import 'otp_screen.dart';
 import 'welcome_screen.dart';
 import '../widgets/luxury_error_modal.dart';
+import '../widgets/rotating_flower_loader.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -181,9 +182,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
-
               const Spacer(),
-
+              if (_isLoading) ...[
+                const RotatingFlowerLoader(size: 80),
+                const Spacer(),
+              ],
               Text(
                 _getGreeting(),
                 style: const TextStyle(
@@ -386,7 +389,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
                 _isLoading
-                    ? const CircularProgressIndicator(color: goldColor)
+                    ? Container() // Loader is now above greeting
                     : _buildGoldButton(
                         text: 'SEND OTP',
                         onPressed: _handleLogin,
@@ -455,8 +458,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
-
-              const SizedBox(height: 40),
+              if (_isLoading) ...[
+                const SizedBox(height: 24),
+                const RotatingFlowerLoader(size: 70),
+              ] else
+                const SizedBox(height: 40),
               Text(
                 _getGreeting(),
                 style: const TextStyle(

@@ -439,7 +439,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
 
   void _startTracking() {
     _updateLocation();
-    _locationTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    _locationTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       _updateLocation();
     });
   }

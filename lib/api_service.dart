@@ -11,8 +11,11 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 class _PusherManager {
   PusherChannelsClient? _client;
   final Map<String, Channel> _channels = {};
+  // Subscriptions queued before the connection is established
+  final List<void Function()> _pendingSubscriptions = [];
   String? _token;
   String? _authUrl;
+  bool _connected = false;
 
   bool get isConnected => _client != null;
 
@@ -30,41 +33,43 @@ class _PusherManager {
 
     debugPrint('[Pusher] WebSocket URI: ${options.uri}');
 
-    // Completer that resolves once the WebSocket is actually connected
     final connectionCompleter = Completer<void>();
 
     _client = PusherChannelsClient.websocket(
       options: options,
       connectionErrorHandler: (exception, trace, reconnect) {
         debugPrint('[Pusher] ❌ Connection error: $exception');
+        _connected = false;
         if (!connectionCompleter.isCompleted) {
           connectionCompleter.completeError(exception);
         }
-        debugPrint('[Pusher] Attempting reconnect in 2 seconds...');
-        Future.delayed(const Duration(seconds: 2), () {
-          reconnect();
-        });
+        Future.delayed(const Duration(seconds: 2), reconnect);
       },
     );
 
     _client!.onConnectionEstablished.listen((_) {
+      _connected = true;
       debugPrint(
-        '[Pusher] ✅ Connected! Re-subscribing ${_channels.length} channels.',
+        '[Pusher] ✅ Connected! channels=${_channels.length} pending=${_pendingSubscriptions.length}',
       );
-      // Complete once so init() can return
       if (!connectionCompleter.isCompleted) {
         connectionCompleter.complete();
       }
-      // Re-subscribe any channels that were registered before reconnect
+      // Re-subscribe channels from previous connection (after reconnect)
       for (final ch in _channels.values) {
         ch.subscribe();
+      }
+      // Flush pending subscriptions that were queued before we connected
+      final pending = List<void Function()>.from(_pendingSubscriptions);
+      _pendingSubscriptions.clear();
+      for (final sub in pending) {
+        sub();
       }
     });
 
     _client!.connect();
     debugPrint('[Pusher] 🔄 Connecting to api.spacall.ph...');
 
-    // Wait for connection before returning so callers can safely subscribe channels
     await connectionCompleter.future.timeout(
       const Duration(seconds: 10),
       onTimeout: () {
@@ -73,15 +78,17 @@ class _PusherManager {
     );
   }
 
-  /// Subscribe to a private channel (e.g. 'booking.123') and
-  /// listen for [eventName] (e.g. 'MessageSent'). Returns a stream.
+  /// Subscribe to a private channel.
+  /// Safe to call before OR after connection is established.
   Stream<Map<String, dynamic>> privateChannel(
     String channelName,
     String eventName,
   ) {
-    assert(_client != null, 'Call init() before listening to channels');
     final fullName = 'private-$channelName';
-    if (!_channels.containsKey(fullName)) {
+
+    void doSubscribe() {
+      if (_channels.containsKey(fullName) || _client == null) return;
+      debugPrint('[Pusher] 🔑 Subscribing $fullName via $_authUrl');
       final ch = _client!.privateChannel(
         fullName,
         authorizationDelegate:
@@ -90,24 +97,57 @@ class _PusherManager {
               headers: {
                 'Authorization': 'Bearer $_token',
                 'Accept': 'application/json',
+                'Content-Type': 'application/x-www-form-urlencoded',
               },
             ),
       );
       _channels[fullName] = ch;
+      ch
+          .bind('pusher:subscription_succeeded')
+          .listen((_) => debugPrint('[Pusher] ✅ Subscribed: $fullName'));
+      ch
+          .bind('pusher:subscription_error')
+          .listen(
+            (e) => debugPrint('[Pusher] ❌ Sub error $fullName: ${e.data}'),
+          );
       ch.subscribe();
-      debugPrint('[Pusher] Subscribed to $fullName');
+      debugPrint('[Pusher] 📡 subscribe() sent for $fullName');
     }
 
-    return _channels[fullName]!.bind(eventName).map((event) {
-      final raw = event.data;
-      if (raw == null) return <String, dynamic>{};
-      if (raw is Map<String, dynamic>) return raw;
-      try {
-        return Map<String, dynamic>.from(jsonDecode(raw.toString()));
-      } catch (_) {
-        return <String, dynamic>{'raw': raw};
+    if (_connected) {
+      doSubscribe();
+    } else {
+      debugPrint('[Pusher] ⏳ Queuing $fullName (not connected yet)');
+      _pendingSubscriptions.add(doSubscribe);
+    }
+
+    // Return a stream that binds to the channel once it's available
+    final controller = StreamController<Map<String, dynamic>>.broadcast();
+    void tryBind() {
+      if (_channels.containsKey(fullName)) {
+        _channels[fullName]!.bind(eventName).listen((event) {
+          final raw = event.data;
+          if (raw == null) {
+            controller.add({});
+          } else if (raw is Map<String, dynamic>) {
+            controller.add(raw);
+          } else {
+            try {
+              controller.add(
+                Map<String, dynamic>.from(jsonDecode(raw.toString())),
+              );
+            } catch (_) {
+              controller.add({'raw': raw});
+            }
+          }
+        });
+      } else {
+        Future.delayed(const Duration(milliseconds: 200), tryBind);
       }
-    });
+    }
+
+    Future.delayed(const Duration(milliseconds: 50), tryBind);
+    return controller.stream;
   }
 
   void disconnect() {
@@ -115,10 +155,12 @@ class _PusherManager {
       ch.unsubscribe();
     }
     _channels.clear();
+    _pendingSubscriptions.clear();
     _client?.disconnect();
     _client = null;
     _token = null;
     _authUrl = null;
+    _connected = false;
   }
 }
 
@@ -152,12 +194,17 @@ class ApiService {
 
   final _PusherManager _pusher = _PusherManager();
 
-  Future<void> initEcho(String token, int providerId) async {
+  Future<void> initEcho(
+    String token,
+    int providerId, {
+    void Function()? onConnected,
+  }) async {
     if (_pusher.isConnected) return;
-    final authUrl =
-        '${baseUrl.replaceFirst(RegExp(r'/api$'), '')}/broadcasting/auth';
+    final authUrl = '$baseUrl/broadcasting/auth';
     await _pusher.init(token: token, authUrl: authUrl);
     debugPrint('[Pusher] Echo initialized for provider $providerId');
+    // Connection is fully ready — call onConnected if provided
+    onConnected?.call();
   }
 
   void listenForBookings(int providerId, Function(dynamic) onBookingReceived) {

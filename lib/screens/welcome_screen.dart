@@ -91,24 +91,36 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final token = widget.userData['token'];
     debugPrint('[WS] ✅ Starting WebSocket for provider ID: $providerId');
 
-    _apiService.initEcho(token, providerId).then((_) {
-      if (!mounted) return;
-      _apiService.listenForBookings(providerId, (booking) {
-        if (!mounted) return;
-        debugPrint('[WelcomeScreen] 🔔 REAL-TIME BookingRequested received!');
-        // Mark this booking as already seen so polling doesn't re-notify
-        if (booking is Map<String, dynamic> && booking['id'] != null) {
-          _lastDirectBookingId = booking['id'];
-        }
-        // Refresh the request count in the background
-        _checkActiveRequests(suppressNotification: true);
-        // Show the notification IMMEDIATELY from the WebSocket payload
-        _showBookingNotification(booking, isDirect: true);
-      });
-      debugPrint(
-        '[WelcomeScreen] Real-time listener active for provider $providerId',
-      );
-    });
+    _apiService
+        .initEcho(
+          token,
+          providerId,
+          onConnected: () {
+            // Runs INSIDE onConnectionEstablished — fully connected guaranteed.
+            // This fixes a release-mode timing issue where subscribe() was called
+            // before dart_pusher_channels internals were ready (AOT runs much faster).
+            debugPrint(
+              '[WelcomeScreen] onConnected — subscribing channels for provider $providerId',
+            );
+            _apiService.listenForBookings(providerId, (booking) {
+              if (!mounted) return;
+              debugPrint(
+                '[WelcomeScreen] 🔔 REAL-TIME BookingRequested received!',
+              );
+              if (booking is Map<String, dynamic> && booking['id'] != null) {
+                _lastDirectBookingId = booking['id'];
+              }
+              _checkActiveRequests(suppressNotification: true);
+              _showBookingNotification(booking, isDirect: true);
+            });
+            debugPrint(
+              '[WelcomeScreen] Real-time listener active for provider $providerId',
+            );
+          },
+        )
+        .catchError((e) {
+          debugPrint('[WelcomeScreen] initEcho error: $e');
+        });
   }
 
   @override

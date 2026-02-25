@@ -130,6 +130,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   void _startPolling() {
+    _fetchTiers(); // Fetch tiers once or periodically
     _fetchProfile();
     _checkActiveRequests();
     _checkOngoingJob();
@@ -144,6 +145,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     _pollingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       if (_isOnline) {
         _fetchProfile();
+        if (timer.tick % 6 == 0) _fetchTiers(); // Refresh tiers every minute
         _fetchDashboardStats(); // Periodic fetch
         _checkActiveRequests();
         _checkOngoingJob();
@@ -155,6 +157,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         _updateLiveLocation();
       }
     });
+  }
+
+  Future<void> _fetchTiers() async {
+    try {
+      final tiers = await _apiService.getTiers(widget.userData['token']);
+      if (mounted) {
+        setState(() {
+          widget.userData['tiers'] = tiers;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching tiers: $e');
+    }
   }
 
   Future<void> _checkWaiver() async {
@@ -201,8 +216,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     try {
       final profile = await _apiService.getProfile(widget.userData['token']);
       final user = profile['user'];
+      final provider = profile['provider'];
+
       if (mounted) {
         setState(() {
+          // Update the global userData map so child screens (like AccountScreen) get the fresh data
+          widget.userData['user'] = user;
+          widget.userData['provider'] = provider;
+
           // Adjust parsing based on actual API response structure
           _walletBalance =
               double.tryParse(user['wallet_balance'].toString()) ?? 0.00;

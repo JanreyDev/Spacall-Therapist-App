@@ -210,8 +210,11 @@ class _AccountScreenState extends State<AccountScreen> {
     final vipStatus = (therapistProfile['vip_status'] ?? '')
         .toString()
         .toLowerCase();
+    final currentTier = provider['current_tier'];
+    final int currentLevel = currentTier?['level'] ?? 0;
+
     final isActuallyPending = _isUpgradePending || vipStatus == 'pending';
-    final isVip = tier == 'vip' || vipStatus == 'approved';
+    final isVip = tier == 'vip' || vipStatus == 'approved' || currentLevel > 0;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -572,6 +575,9 @@ class _AccountScreenState extends State<AccountScreen> {
                   ),
                 ),
 
+              // VIP Status & Progress Section
+              _buildVipProgressSection(provider, themeProvider),
+
               const SizedBox(height: 40),
 
               // Settings Sections
@@ -788,6 +794,272 @@ class _AccountScreenState extends State<AccountScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildVipProgressSection(
+    Map<String, dynamic> provider,
+    ThemeProvider themeProvider,
+  ) {
+    final goldColor = const Color(0xFFEBC14F);
+    final stats = provider['therapist_stat'] ?? {};
+    final currentTier = provider['current_tier'];
+
+    // Extract stats
+    final int onlineMinutes = stats['total_online_minutes'] ?? 0;
+    final double onlineHours = onlineMinutes / 60.0;
+    final int extensions = stats['total_extensions'] ?? 0;
+    final int bookings = stats['total_bookings'] ?? 0;
+
+    // Use dynamic tiers from API if available, otherwise fallback to defaults
+    final List<dynamic> fetchedTiers = widget.userData['tiers'] ?? [];
+    final List<Map<String, dynamic>> allTiers = fetchedTiers.isNotEmpty
+        ? fetchedTiers
+              .map(
+                (t) => {
+                  'name': t['name'] ?? 'Tier',
+                  'level': t['level'] ?? 0,
+                  'hours': (t['online_hours_required'] ?? 0).toDouble(),
+                  'extensions': (t['extensions_required'] ?? 0).toDouble(),
+                  'bookings': (t['bookings_required'] ?? 0).toDouble(),
+                },
+              )
+              .toList()
+        : [
+            {
+              'name': 'Tier 1',
+              'level': 1,
+              'hours': 100,
+              'extensions': 50,
+              'bookings': 100,
+            },
+            {
+              'name': 'Tier 2',
+              'level': 2,
+              'hours': 500,
+              'extensions': 150,
+              'bookings': 250,
+            },
+            {
+              'name': 'Tier 3',
+              'level': 3,
+              'hours': 1000,
+              'extensions': 300,
+              'bookings': 500,
+            },
+          ];
+
+    final int currentLevel = currentTier?['level'] ?? 0;
+    Map<String, dynamic>? nextTier;
+
+    // Sort allTiers by level to ensure correct order
+    allTiers.sort((a, b) => a['level'].compareTo(b['level']));
+
+    // Find the first tier that has a level higher than currentLevel
+    for (var tier in allTiers) {
+      if (tier['level'] > currentLevel) {
+        nextTier = tier;
+        break;
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: goldColor.withOpacity(0.1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "VIP STATUS",
+                      style: TextStyle(
+                        color: goldColor.withOpacity(0.5),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      currentTier?['name'] ?? "Standard Account",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                if (nextTier != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: goldColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      "PROGRESS TO ${nextTier['name'].toUpperCase()}",
+                      style: TextStyle(
+                        color: goldColor,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            if (nextTier != null) ...[
+              _buildStatProgress(
+                "Online Hours",
+                onlineHours,
+                nextTier['hours'].toDouble(),
+                Icons.timer_outlined,
+                goldColor,
+                themeProvider,
+              ),
+              const SizedBox(height: 16),
+              _buildStatProgress(
+                "Extensions",
+                extensions.toDouble(),
+                nextTier['extensions'].toDouble(),
+                Icons.add_circle_outline,
+                goldColor,
+                themeProvider,
+              ),
+              const SizedBox(height: 16),
+              _buildStatProgress(
+                "Completed Bookings",
+                bookings.toDouble(),
+                nextTier['bookings'].toDouble(),
+                Icons.check_circle_outline,
+                goldColor,
+                themeProvider,
+              ),
+            ] else if (currentLevel > 0) ...[
+              const Center(
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.workspace_premium,
+                      color: Color(0xFFEBC14F),
+                      size: 48,
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      "MAX TIER REACHED",
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              Text(
+                "Complete the requirements to upgrade your account and unlock premium benefits.",
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatProgress(
+    String label,
+    double current,
+    double target,
+    IconData icon,
+    Color color,
+    ThemeProvider themeProvider,
+  ) {
+    final double progress = (current / target).clamp(0.0, 1.0);
+    final bool isCompleted = current >= target;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: color.withOpacity(0.7)),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: themeProvider.textColor.withOpacity(0.7),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              "${current.toInt()} / ${target.toInt()}",
+              style: TextStyle(
+                color: isCompleted ? Colors.green : themeProvider.textColor,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Stack(
+          children: [
+            Container(
+              height: 6,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            AnimatedContainer(
+              duration: const Duration(seconds: 1),
+              height: 6,
+              width: (MediaQuery.of(context).size.width - 96) * progress,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isCompleted
+                      ? [Colors.green.shade400, Colors.green.shade700]
+                      : [color.withOpacity(0.5), color],
+                ),
+                borderRadius: BorderRadius.circular(3),
+                boxShadow: [
+                  if (isCompleted)
+                    BoxShadow(
+                      color: Colors.green.withOpacity(0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

@@ -1068,4 +1068,23 @@ class ApiService {
       throw Exception('Failed to fetch transactions');
     }
   }
+
+  Future<List<dynamic>> getTiers(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/tiers'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['tiers'] ?? [];
+      }
+      throw Exception('Failed to fetch tiers');
+    } catch (e) {
+      throw Exception('Tiers Fetch Error: $e');
+    }
+  }
 }

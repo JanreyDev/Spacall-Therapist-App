@@ -35,8 +35,18 @@ class _SupportChatScreenState extends State<SupportChatScreen> {
   }
 
   void _setupEcho(int sessionId) {
-    final userId = widget.userData['user']['id'];
-    _apiService.initEcho(widget.userData['token'], userId).then((_) {
+    // Extract providerId from userData
+    var providerId = widget.userData['provider']?['id'];
+    if (providerId == null && widget.userData['user']?['provider'] != null) {
+      providerId = widget.userData['user']['provider']['id'];
+    }
+
+    if (providerId == null) {
+      debugPrint('[SupportChat] ❌ No providerId found for WebSocket setup');
+      return;
+    }
+
+    _apiService.initEcho(widget.userData['token'], providerId).then((_) {
       _apiService.listenForSupportMessages(sessionId, (messageData) {
         if (mounted) {
           Provider.of<SupportChatProvider>(

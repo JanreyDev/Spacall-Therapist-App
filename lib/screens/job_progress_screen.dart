@@ -160,21 +160,22 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         try {
           final profile = await _apiService.getProfile(widget.token);
           if (mounted) {
-            setState(() {
-              _currentUserId = profile['user']['id'];
-            });
-
-            // Initialize Echo for therapist
+            // Note: API returns { user: {...}, provider: {...} }
             final user = profile['user'];
-            final providers = user?['providers'] as List?;
-            final providerId = (providers != null && providers.isNotEmpty)
-                ? providers[0]['id']
-                : null;
+            final provider = profile['provider'];
+            final providerId = provider?['id'];
+
+            setState(() {
+              _currentUserId = user?['id'];
+            });
 
             if (providerId != null) {
               await _apiService.initEcho(widget.token, providerId);
-              // Start listening AFTER Echo is ready
               _initializeRealTimeEvents();
+            } else {
+              debugPrint(
+                '[JobProgressScreen] ❌ No providerId found in profile!',
+              );
             }
 
             Provider.of<ChatProvider>(

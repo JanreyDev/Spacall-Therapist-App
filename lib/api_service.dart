@@ -196,14 +196,24 @@ class ApiService {
 
   Future<void> initEcho(
     String token,
-    int providerId, {
+    int? providerId, {
     void Function()? onConnected,
   }) async {
-    if (_pusher.isConnected) return;
+    if (_pusher.isConnected) {
+      debugPrint('[Pusher] initEcho: Already connected, skipping.');
+      onConnected?.call();
+      return;
+    }
+
+    if (providerId == null || providerId == 0) {
+      debugPrint('[Pusher] ❌ initEcho: Invalid providerId: $providerId');
+      return;
+    }
+
     final authUrl = '$baseUrl/broadcasting/auth';
+    debugPrint('[Pusher] 🔄 Initializing Echo for provider $providerId...');
     await _pusher.init(token: token, authUrl: authUrl);
-    debugPrint('[Pusher] Echo initialized for provider $providerId');
-    // Connection is fully ready — call onConnected if provided
+    debugPrint('[Pusher] ✅ Echo initialized for provider $providerId');
     onConnected?.call();
   }
 

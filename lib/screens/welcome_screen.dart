@@ -44,6 +44,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   int? _lastNearbyBookingId;
 
   int? _lastDirectBookingId;
+  final Set<int> _notifiedBookingIds = {};
   double _walletBalance = 0.00;
   String _verificationStatus = 'pending'; // pending, verified, rejected
   String _currency = '₱';
@@ -78,8 +79,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       provider = widget.userData['user']['provider'];
     }
 
-    debugPrint('[WS] userData keys: ${widget.userData.keys.toList()}');
-    debugPrint('[WS] provider from userData: $provider');
+    // Support for list of providers if backend returns it that way
+    if (provider == null &&
+        widget.userData['user']?['providers'] is List &&
+        (widget.userData['user']['providers'] as List).isNotEmpty) {
+      provider = widget.userData['user']['providers'][0];
+    }
 
     if (provider == null || provider['id'] == null) {
       debugPrint(
@@ -108,11 +113,30 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               debugPrint(
                 '[WelcomeScreen] 🔔 REAL-TIME BookingRequested received!',
               );
-              if (booking is Map<String, dynamic> && booking['id'] != null) {
-                _lastDirectBookingId = booking['id'];
+
+              final bookingId = booking is Map<String, dynamic>
+                  ? booking['id']
+                  : null;
+              if (bookingId != null) {
+                if (_notifiedBookingIds.contains(bookingId)) {
+                  debugPrint(
+                    '[WelcomeScreen] Already notified for $bookingId, skipping.',
+                  );
+                  return;
+                }
+                _lastDirectBookingId = bookingId;
               }
+
+              // Dynamically determine if it's direct based on assignment_type or provider_id
+              bool dynamicIsDirect = false;
+              if (booking is Map<String, dynamic>) {
+                dynamicIsDirect =
+                    booking['assignment_type'] == 'direct_request' ||
+                    booking['provider_id'] != null;
+              }
+
               _checkActiveRequests(suppressNotification: true);
-              _showBookingNotification(booking, isDirect: true);
+              _showBookingNotification(booking, isDirect: dynamicIsDirect);
             });
             debugPrint(
               '[WelcomeScreen] Real-time listener active for provider $providerId',
@@ -304,7 +328,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         final latestBooking = requests.first;
         final latestId = latestBooking['id'];
 
-        if (_lastDirectBookingId != latestId) {
+        if (_lastDirectBookingId != latestId &&
+            !_notifiedBookingIds.contains(latestId)) {
           _lastDirectBookingId = latestId;
           if (mounted) {
             _showBookingNotification(latestBooking, isDirect: true);
@@ -383,7 +408,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         final latestId = latestBooking['id'];
 
         // Only notify if it's a new booking we haven't shown yet
-        if (_lastNearbyBookingId != latestId) {
+        if (_lastNearbyBookingId != latestId &&
+            !_notifiedBookingIds.contains(latestId)) {
           _lastNearbyBookingId = latestId;
           if (mounted) {
             _showBookingNotification(latestBooking, isDirect: false);
@@ -413,6 +439,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     Map<String, dynamic> booking, {
     bool isDirect = false,
   }) {
+    final bookingId = booking['id'];
+    if (bookingId != null) {
+      _notifiedBookingIds.add(bookingId);
+    }
+
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final goldColor = themeProvider.goldColor;
     final customer = booking['customer'];

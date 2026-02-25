@@ -67,32 +67,83 @@ class _AnimatedLogoScreenState extends State<AnimatedLogoScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. Logo Layer (Middle) - This is the base
+          // 1. Central Content (Logo + Branding)
           Center(
-            child: Stack(
-              alignment: Alignment.center,
-              clipBehavior: Clip.none,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Base Logo
-                Image.asset(
-                  'assets/images/logo_base.png',
-                  width: 280,
-                  height: 280,
-                  fit: BoxFit.contain,
+                // Logo Stack
+                Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Base Logo
+                    Image.asset(
+                      'assets/images/logo_base.png',
+                      width: 280,
+                      height: 280,
+                      fit: BoxFit.contain,
+                    ),
+
+                    // Spinning Flower - Positioned precisely on the left arc
+                    Positioned(
+                      left: 0,
+                      bottom: 0,
+                      child: RotationTransition(
+                        turns: _mainController,
+                        child: Image.asset(
+                          'assets/images/flower.png',
+                          width: 110,
+                          height: 110,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
 
-                // Spinning Flower - Positioned precisely on the left arc
-                Positioned(
-                  left: 0,
-                  bottom: 0,
-                  child: RotationTransition(
-                    turns: _mainController,
-                    child: Image.asset(
-                      'assets/images/flower.png',
-                      width: 110,
-                      height: 110,
+                const SizedBox(height: 10), // Space between logo and text
+                // Branding Text & Loading
+                Column(
+                  children: [
+                    const Text(
+                      'SPACALL',
+                      style: TextStyle(
+                        color: Color(0xFFEBC14F),
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 10,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'PREMIUM WELLNESS SERVICES',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.3),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 3,
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    // Premium subtle loading bar
+                    TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0.0, end: 1.0),
+                      duration: const Duration(seconds: 10),
+                      builder: (context, value, child) {
+                        return SizedBox(
+                          width: 120,
+                          height: 2,
+                          child: LinearProgressIndicator(
+                            value: value,
+                            backgroundColor: Colors.white.withOpacity(0.05),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Color(0xFFEBC14F),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -114,55 +165,6 @@ class _AnimatedLogoScreenState extends State<AnimatedLogoScreen>
                   ),
                 );
               },
-            ),
-          ),
-
-          // 3. Branding Text & Loading
-          Positioned(
-            bottom: 60,
-            left: 0,
-            right: 0,
-            child: Column(
-              children: [
-                const Text(
-                  'SPACALL',
-                  style: TextStyle(
-                    color: Color(0xFFEBC14F),
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 10,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'PREMIUM WELLNESS SERVICES',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.3),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 3,
-                  ),
-                ),
-                const SizedBox(height: 30),
-                // Premium subtle loading bar - now determinate to show 10s progress
-                TweenAnimationBuilder<double>(
-                  tween: Tween<double>(begin: 0.0, end: 1.0),
-                  duration: const Duration(seconds: 10),
-                  builder: (context, value, child) {
-                    return SizedBox(
-                      width: 120,
-                      height: 2,
-                      child: LinearProgressIndicator(
-                        value: value,
-                        backgroundColor: Colors.white.withOpacity(0.05),
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          Color(0xFFEBC14F),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
             ),
           ),
         ],

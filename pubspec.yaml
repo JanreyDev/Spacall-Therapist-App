@@ -49,6 +49,7 @@ dependencies:
   provider: ^6.1.1
   audioplayers: ^6.0.0
   dart_pusher_channels: ^1.2.3
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

@@ -16,6 +16,7 @@ import 'account_screen.dart';
 import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';
+import 'store_staff_screen.dart';
 import '../widgets/luxury_success_modal.dart';
 import '../widgets/luxury_waiver_dialog.dart';
 
@@ -1240,6 +1241,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final goldColor = themeProvider.goldColor;
+    final user = widget.userData['user'];
 
     return Scaffold(
       backgroundColor: themeProvider.backgroundColor,
@@ -1254,6 +1256,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               setState(() => _selectedIndex = index);
             },
           ),
+          if (user?['customer_tier'] == 'store')
+            StoreStaffScreen(token: widget.userData['token']),
           BookingHistoryScreen(
             token: widget.userData['token'],
             showAppBar: false,
@@ -1266,6 +1270,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Widget _buildBottomNav(Color goldColor, ThemeProvider themeProvider) {
+    final user = widget.userData['user'];
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E1E),
@@ -1319,6 +1324,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             activeIcon: const Icon(Icons.notifications_rounded),
             label: 'Requests',
           ),
+          if (user?['customer_tier'] == 'store')
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.people_outline_rounded),
+              activeIcon: Icon(Icons.people_rounded),
+              label: 'Staff',
+            ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.history_outlined),
             activeIcon: Icon(Icons.history),

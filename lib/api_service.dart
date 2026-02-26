@@ -1149,4 +1149,75 @@ class ApiService {
       throw Exception('Tiers Fetch Error: $e');
     }
   }
+
+  Future<List<dynamic>> getStoreStaff(String token) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/store/staff'),
+      headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to fetch store staff');
+    }
+  }
+
+  Future<Map<String, dynamic>> addStoreStaff({
+    required String token,
+    required String name,
+    required String bio,
+    required int yearsOfExperience,
+    dynamic photo,
+  }) async {
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/store/staff'),
+      );
+      request.headers['Authorization'] = 'Bearer $token';
+      request.headers['Accept'] = 'application/json';
+
+      request.fields['name'] = name;
+      request.fields['bio'] = bio;
+      request.fields['years_of_experience'] = yearsOfExperience.toString();
+
+      if (photo != null) {
+        if (photo is XFile) {
+          request.files.add(
+            await http.MultipartFile.fromPath('photo', photo.path),
+          );
+        } else if (photo is String) {
+          request.files.add(await http.MultipartFile.fromPath('photo', photo));
+        }
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to add staff: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Add Staff Error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> toggleStoreStaffStatus(
+    String token,
+    int staffId,
+  ) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/store/staff/$staffId/toggle'),
+      headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to toggle staff status');
+    }
+  }
 }

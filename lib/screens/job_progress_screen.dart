@@ -49,6 +49,14 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   bool _alertShown = false;
   BitmapDescriptor? _clientMarkerIcon;
   Set<Polyline> _polylines = {};
+  List<dynamic> _routeSteps = [];
+  String _totalDistance = '';
+  String _totalDuration = '';
+  int _currentStepIndex = 0;
+  String _selectedTravelMode = 'driving';
+  bool _avoidTolls = false;
+  bool _avoidHighways = false;
+  bool _avoidFerries = false;
 
   Future<void> _loadClientMarkerIcon() async {
     final customer = widget.booking['customer'] ?? {};
@@ -534,19 +542,31 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
       return;
     }
 
-    final points = await _apiService.getRoute(
+    final details = await _apiService.getRouteDetails(
       _currentPosition!,
       _clientLocation,
+      mode: _selectedTravelMode,
+      avoidTolls: _avoidTolls,
+      avoidHighways: _avoidHighways,
+      avoidFerries: _avoidFerries,
     );
 
-    if (mounted && points.isNotEmpty) {
+    if (mounted && details.isNotEmpty) {
       setState(() {
+        final List<LatLng> points = details['points'] != null
+            ? List<LatLng>.from(details['points'])
+            : [];
+        _routeSteps = details['steps'] ?? [];
+        _totalDistance = details['distance'] ?? '';
+        _totalDuration = details['duration'] ?? '';
+        _currentStepIndex = 0; // Reset for simplicity, could be optimized later
+
         _polylines = {
           Polyline(
             polylineId: const PolylineId('route'),
             points: points,
-            color: goldColor,
-            width: 5,
+            color: const Color(0xFF2196F3), // Bright Blue for road line
+            width: 8,
             jointType: JointType.round,
             startCap: Cap.roundCap,
             endCap: Cap.roundCap,
@@ -816,12 +836,26 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      _buildActionButton(),
+                      if (!showMap || _currentStatus != 'accepted')
+                        _buildActionButton(),
                     ],
                   ),
                 ),
               ),
             ),
+          if (showMap) ...[
+            if (_currentStatus == 'accepted')
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0, // Dock to bottom
+                child: _buildPreTripOverlay(),
+              ),
+            if (_currentStatus == 'en_route') ...[
+              _buildNavigationOverlay(),
+              _buildTripInfoOverlay(),
+            ],
+          ],
           if (_isLoading)
             const Center(child: CircularProgressIndicator(color: goldColor)),
         ],
@@ -1407,5 +1441,470 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildTripInfoOverlay() {
+    if (_totalDistance.isEmpty && _totalDuration.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Positioned(
+      bottom: 240,
+      right: 16,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: goldColor.withOpacity(0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_totalDuration.isNotEmpty)
+              Text(
+                _totalDuration,
+                style: const TextStyle(
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            if (_totalDistance.isNotEmpty)
+              Text(
+                _totalDistance,
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _onTravelModeChanged(String newMode) {
+    if (_selectedTravelMode != newMode) {
+      setState(() {
+        _selectedTravelMode = newMode;
+        // Optionally show loading while route updates
+        _totalDistance = '...';
+        _totalDuration = '...';
+      });
+      _fetchRoute();
+    }
+  }
+
+  Widget _buildPreTripOverlay() {
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black54,
+            blurRadius: 10,
+            offset: Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Drag Handle
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 32,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          // Title and Actions
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _selectedTravelMode == 'driving'
+                      ? 'Car'
+                      : _selectedTravelMode == 'bicycling'
+                      ? 'Two-wheeler'
+                      : 'Walking',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Route Options/Filter button
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.tune,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        onPressed: _showRouteOptionsModal,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Close button (Optional/Mock)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          // Could implement minimize/close logic later
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Vehicle Options Row
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                _buildGoogleMapsModeOption(Icons.directions_car, 'driving'),
+                const SizedBox(width: 24),
+                _buildGoogleMapsModeOption(Icons.two_wheeler, 'bicycling'),
+                const SizedBox(width: 24),
+                _buildGoogleMapsModeOption(Icons.directions_walk, 'walking'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Divider(color: Colors.white24, height: 1),
+          // ETA and Distance Info
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: _totalDuration.isNotEmpty
+                            ? _totalDuration
+                            : '...',
+                        style: TextStyle(
+                          color:
+                              _selectedTravelMode == 'driving' ||
+                                  _selectedTravelMode == 'bicycling'
+                              ? const Color(
+                                  0xFFE5C07B,
+                                ) // Gold-ish for driving/biking like in maps
+                              : const Color(0xFF4CAF50), // Green for walking
+                          fontSize: 24,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      TextSpan(
+                        text:
+                            ' (${_totalDistance.isNotEmpty ? _totalDistance : "..."})',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Fastest route now due to traffic conditions',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _updateStatus('en_route'),
+                    icon: const Icon(Icons.navigation, color: Colors.black),
+                    label: const Text(
+                      'START JOURNEY',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: goldColor, // Apply app theme gold color
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRouteOptionsModal() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E1E1E),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Route Options',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    title: const Text(
+                      'Avoid tolls',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    activeColor: const Color(0xFF81D4FA),
+                    value: _avoidTolls,
+                    onChanged: (val) {
+                      setState(() => _avoidTolls = val);
+                      setModalState(() => _avoidTolls = val);
+                      _onTravelModeChanged(
+                        _selectedTravelMode,
+                      ); // triggers refresh
+                    },
+                  ),
+                  SwitchListTile(
+                    title: const Text(
+                      'Avoid highways',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    activeColor: const Color(0xFF81D4FA),
+                    value: _avoidHighways,
+                    onChanged: (val) {
+                      setState(() => _avoidHighways = val);
+                      setModalState(() => _avoidHighways = val);
+                      _onTravelModeChanged(
+                        _selectedTravelMode,
+                      ); // triggers refresh
+                    },
+                  ),
+                  SwitchListTile(
+                    title: const Text(
+                      'Avoid ferries',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    activeColor: const Color(0xFF81D4FA),
+                    value: _avoidFerries,
+                    onChanged: (val) {
+                      setState(() => _avoidFerries = val);
+                      setModalState(() => _avoidFerries = val);
+                      _onTravelModeChanged(
+                        _selectedTravelMode,
+                      ); // triggers refresh
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildGoogleMapsModeOption(IconData icon, String mode) {
+    final isSelected = _selectedTravelMode == mode;
+    return GestureDetector(
+      onTap: () => _onTravelModeChanged(mode),
+      child: Column(
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? const Color(0xFF81D4FA) : Colors.white54,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              if (_totalDuration.isNotEmpty)
+                Text(
+                  _totalDuration, // In a real app we'd fetch all 3 ETAs at once, but for now we show current
+                  style: TextStyle(
+                    color: isSelected
+                        ? const Color(0xFF81D4FA)
+                        : Colors.white54,
+                    fontSize: 14,
+                    fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,
+                  ),
+                )
+              else
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white54,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (isSelected)
+            Container(
+              height: 3,
+              width: 40,
+              decoration: const BoxDecoration(
+                color: Color(0xFF81D4FA),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(3)),
+              ),
+            )
+          else
+            const SizedBox(height: 3),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavigationOverlay() {
+    if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) {
+      return const SizedBox.shrink();
+    }
+
+    final step = _routeSteps[_currentStepIndex];
+    final instruction = _stripHtml(step['html_instructions'] ?? '');
+    final distance = step['distance']?['text'] ?? '';
+    final maneuver = step['maneuver'] ?? '';
+
+    return Positioned(
+      top: 16,
+      left: 16,
+      right: 16,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF004D40), // Dark Google Maps green
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(_getManeuverIcon(maneuver), color: Colors.white, size: 40),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    instruction,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (distance.isNotEmpty)
+                    Text(
+                      'Then in $distance',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 14,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _stripHtml(String htmlString) {
+    RegExp exp = RegExp(r"<[^>]*>", multiLine: true, caseSensitive: true);
+    return htmlString.replaceAll(exp, '');
+  }
+
+  IconData _getManeuverIcon(String maneuver) {
+    switch (maneuver) {
+      case 'turn-slight-left':
+      case 'turn-left':
+        return Icons.turn_left;
+      case 'turn-slight-right':
+      case 'turn-right':
+        return Icons.turn_right;
+      case 'turn-sharp-left':
+        return Icons.turn_sharp_left;
+      case 'turn-sharp-right':
+        return Icons.turn_sharp_right;
+      case 'uturn-left':
+      case 'uturn-right':
+        return Icons.u_turn_left;
+      case 'merge':
+        return Icons.merge;
+      case 'roundabout-left':
+      case 'roundabout-right':
+        return Icons.roundabout_right;
+      case 'straight':
+        return Icons.straight;
+      case 'ramp-left':
+      case 'ramp-right':
+        return Icons.ramp_right;
+      default:
+        return Icons.navigation;
+    }
   }
 }

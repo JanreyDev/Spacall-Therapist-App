@@ -1010,29 +1010,81 @@ class ApiService {
     }
   }
 
-  Future<List<LatLng>> getRoute(LatLng origin, LatLng destination) async {
+  Future<Map<String, dynamic>> getRouteDetails(
+    LatLng origin,
+    LatLng destination, {
+    String mode = 'driving',
+    bool avoidTolls = false,
+    bool avoidHighways = false,
+    bool avoidFerries = false,
+  }) async {
+    String apiMode = mode;
+    List<String> avoids = [];
+
+    if (avoidTolls) avoids.add('tolls');
+    if (avoidHighways) avoids.add('highways');
+    if (avoidFerries) avoids.add('ferries');
+
+    if (mode == 'bicycling' || mode == 'two_wheeler') {
+      apiMode = 'driving'; // Fallback to driving to ensure a route is found
+      if (!avoidTolls && mode == 'two_wheeler')
+        avoids.add(
+          'tolls',
+        ); // Motorcycles often avoid tolls by default unless explicitly disabled, but let's just add it if they didn't specify
+    }
+
+    String avoidParam = avoids.isNotEmpty ? '&avoid=${avoids.join('|')}' : '';
+
     const String apiKey = 'AIzaSyB0ufRgcg6WC7icyKzGUp7IeJmaciZVXFw';
     final String url =
-        'https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=$apiKey';
+        'https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&mode=$apiMode$avoidParam&key=$apiKey';
 
     try {
+      debugPrint(
+        'Fetching route from ${origin.latitude},${origin.longitude} to ${destination.latitude},${destination.longitude}',
+      );
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['status'] == 'OK') {
-          final String encodedPolyline =
-              data['routes'][0]['overview_polyline']['points'];
-          return _decodePolyline(encodedPolyline);
+          final route = data['routes'][0];
+          final leg = route['legs'][0];
+
+          final String encodedPolyline = route['overview_polyline']['points'];
+          final List<LatLng> points = _decodePolyline(encodedPolyline);
+
+          final List<dynamic> steps = leg['steps'];
+          final String distance = leg['distance']['text'];
+          final String duration = leg['duration']['text'];
+
+          debugPrint('Route fetched successfully with ${points.length} points');
+
+          return {
+            'points': points,
+            'steps': steps,
+            'distance': distance,
+            'duration': duration,
+          };
         } else {
+          debugPrint('Directions API returned status: ${data['status']}');
+          debugPrint('Full response: ${response.body}');
           throw Exception('Directions API error: ${data['status']}');
         }
       } else {
-        throw Exception('Failed to fetch directions');
+        throw Exception(
+          'Failed to fetch directions, status ${response.statusCode}',
+        );
       }
     } catch (e) {
       debugPrint('Error fetching directions: $e');
-      return [];
+      return {};
     }
+  }
+
+  // Backward compatibility wrapper or replacement
+  Future<List<LatLng>> getRoute(LatLng origin, LatLng destination) async {
+    final details = await getRouteDetails(origin, destination);
+    return details['points'] ?? [];
   }
 
   List<LatLng> _decodePolyline(String encoded) {

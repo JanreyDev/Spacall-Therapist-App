@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'onboarding_screen.dart';
 
 class AnimatedLogoScreen extends StatefulWidget {
@@ -25,14 +26,90 @@ class _AnimatedLogoScreenState extends State<AnimatedLogoScreen>
       vsync: this,
     )..repeat();
 
-    // Navigate to OnboardingScreen after 10 seconds
-    Timer(const Duration(seconds: 10), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+    // Begin the location check flow
+    _checkLocationAndProceed();
+  }
+
+  Future<void> _checkLocationAndProceed() async {
+    // Wait for at least part of the splash animation to play (e.g. 5 seconds min)
+    await Future.delayed(const Duration(seconds: 5));
+
+    if (!mounted) return;
+
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Check if location services are enabled
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      _showLocationRequiredDialog(
+        'Location Services Disabled',
+        'Please enable location services in your device settings to use the Spacall app.',
+      );
+      return;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        _showLocationRequiredDialog(
+          'Permission Denied',
+          'Location permissions are required to use the Therapist app. Please grant permissions.',
         );
+        return;
       }
-    });
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      _showLocationRequiredDialog(
+        'Permission Denied Forever',
+        'Location permissions are permanently denied, we cannot request permissions. Please enable them from system settings.',
+      );
+      return;
+    }
+
+    // Permission granted and services enabled, proceed!
+    _proceedToNextScreen();
+  }
+
+  Future<void> _proceedToNextScreen() async {
+    if (!mounted) return;
+
+    // For now we just route to Onboarding/Login.
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+    );
+  }
+
+  void _showLocationRequiredDialog(String title, String message) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          title: Text(
+            title,
+            style: const TextStyle(color: const Color(0xFFD4AF37)),
+          ),
+          content: Text(message, style: const TextStyle(color: Colors.white70)),
+          actions: <Widget>[
+            TextButton(
+              child: const Text(
+                'Try Again',
+                style: TextStyle(color: const Color(0xFFD4AF37)),
+              ),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _checkLocationAndProceed(); // Retry checking
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _updateSparkles() {

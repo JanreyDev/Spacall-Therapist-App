@@ -192,7 +192,7 @@ class ApiService {
     return 'https://api.spacall.ph$path';
   }
 
-  final _PusherManager _pusher = _PusherManager();
+  static final _PusherManager _pusher = _PusherManager();
 
   Future<void> initEcho(
     String token,

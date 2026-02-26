@@ -9,7 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../api_service.dart';
 import '../chat_provider.dart';
-import '../widgets/luxury_success_modal.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../widgets/luxury_error_modal.dart';
 
 const goldColor = Color(0xFFD4AF37);
@@ -48,34 +48,64 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _alertShown = false;
   BitmapDescriptor? _clientMarkerIcon;
+  BitmapDescriptor? _therapistMarkerIcon;
   Set<Polyline> _polylines = {};
-  List<dynamic> _routeSteps = [];
   String _totalDistance = '';
   String _totalDuration = '';
-  int _currentStepIndex = 0;
   String _selectedTravelMode = 'driving';
   bool _avoidTolls = false;
   bool _avoidHighways = false;
   bool _avoidFerries = false;
+  bool _isFetchingRoute = false;
+  Timer? _routeDebounceTimer;
+  bool _isNavMode = false;
+  double _bearing = 0.0;
+  StreamSubscription<Position>? _positionStream;
 
   Future<void> _loadClientMarkerIcon() async {
+    // Load client photo (with blue border)
     final customer = widget.booking['customer'] ?? {};
-    final url = ApiService.normalizePhotoUrl(customer['profile_photo_url']);
-    if (url == null) return;
-
-    try {
-      final icon = await _createCircularMarkerIcon(url);
-      if (mounted) {
-        setState(() {
-          _clientMarkerIcon = icon;
-        });
+    final clientUrl = ApiService.normalizePhotoUrl(
+      customer['profile_photo_url'],
+    );
+    if (clientUrl != null) {
+      try {
+        final icon = await _createCircularMarkerIcon(
+          clientUrl,
+          borderColor: Colors.lightBlueAccent,
+        );
+        if (mounted) setState(() => _clientMarkerIcon = icon);
+      } catch (e) {
+        debugPrint('Error loading client marker icon: $e');
       }
-    } catch (e) {
-      debugPrint('Error loading client marker icon: $e');
+    }
+
+    // Load therapist (self) photo (with gold border)
+    // Profile photo is passed as part of the session context via API
+    // We fetch it from the booking's therapist data if available
+    final therapist = widget.booking['therapist'] ?? {};
+    final therapistUser = therapist['user'] ?? therapist;
+    final therapistUrl = ApiService.normalizePhotoUrl(
+      therapistUser['facial_scanner_photo_url'] ??
+          therapistUser['profile_photo_url'],
+    );
+    if (therapistUrl != null) {
+      try {
+        final icon = await _createCircularMarkerIcon(
+          therapistUrl,
+          borderColor: goldColor,
+        );
+        if (mounted) setState(() => _therapistMarkerIcon = icon);
+      } catch (e) {
+        debugPrint('Error loading therapist marker icon: $e');
+      }
     }
   }
 
-  Future<BitmapDescriptor> _createCircularMarkerIcon(String url) async {
+  Future<BitmapDescriptor> _createCircularMarkerIcon(
+    String url, {
+    Color borderColor = goldColor,
+  }) async {
     final Completer<ui.Image> completer = Completer();
     final NetworkImage networkImage = NetworkImage(url);
     final ImageStream stream = networkImage.resolve(ImageConfiguration.empty);
@@ -95,7 +125,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
 
     // Draw background circle (border)
     final Paint borderPaint = Paint()
-      ..color = goldColor
+      ..color = borderColor
       ..style = PaintingStyle.fill;
     canvas.drawCircle(const Offset(radius, radius), radius, borderPaint);
 
@@ -291,6 +321,8 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     _locationTimer?.cancel();
     _chatRefreshTimer?.cancel();
     _countdownTimer?.cancel();
+    _routeDebounceTimer?.cancel();
+    _positionStream?.cancel();
     _messageController.dispose();
     _chatScrollController.dispose();
     _audioPlayer.dispose();
@@ -455,34 +487,109 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
 
   Future<void> _updateLocation() async {
     try {
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      if (mounted) {
-        setState(() {
-          _currentPosition = LatLng(position.latitude, position.longitude);
-        });
-
-        if (_currentStatus == 'en_route' || _currentStatus == 'accepted') {
-          _fetchRoute();
-        }
-
-        // Update location on backend
-        await _apiService.updateLocation(
-          token: widget.token,
-          latitude: position.latitude,
-          longitude: position.longitude,
-          isOnline: true,
+      Position? position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 4),
         );
+      } catch (e) {
+        position = await Geolocator.getLastKnownPosition();
+      }
 
-        if (_mapController != null && _currentPosition != null) {
-          _mapController!.animateCamera(
-            CameraUpdate.newLatLng(_currentPosition!),
-          );
-        }
+      if (position != null) {
+        _processNewLocation(position);
       }
     } catch (e) {
-      print('Location update error: $e');
+      debugPrint('Location update error: $e');
+    }
+  }
+
+  void _processNewLocation(Position position) {
+    if (!mounted) return;
+
+    final newPos = LatLng(position.latitude, position.longitude);
+
+    setState(() {
+      // Only update bearing if moving significantly to prevent marker spinning
+      if (_currentPosition != null && position.speed > 0.8) {
+        _bearing = position.heading;
+      }
+      _currentPosition = newPos;
+    });
+
+    if (_currentStatus == 'en_route' || _currentStatus == 'accepted') {
+      _scheduleRouteFetch();
+    }
+
+    // Update location on backend
+    _apiService.updateLocation(
+      token: widget.token,
+      latitude: position.latitude,
+      longitude: position.longitude,
+      isOnline: true,
+    );
+
+    if (_mapController != null && _currentPosition != null) {
+      if (_isNavMode) {
+        _mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: _currentPosition!,
+              zoom: 18.5,
+              tilt: 60.0,
+              bearing: _bearing,
+            ),
+          ),
+        );
+      } else {
+        _mapController!.animateCamera(
+          CameraUpdate.newLatLng(_currentPosition!),
+        );
+      }
+    }
+  }
+
+  void _startNavMode() {
+    if (_positionStream != null) return;
+
+    setState(() => _isNavMode = true);
+
+    _positionStream =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 3,
+          ),
+        ).listen((position) {
+          _processNewLocation(position);
+        });
+  }
+
+  void _stopNavMode() {
+    _positionStream?.cancel();
+    _positionStream = null;
+    setState(() => _isNavMode = false);
+
+    if (_mapController != null && _currentPosition != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: _currentPosition!,
+            zoom: 15.0,
+            tilt: 0.0,
+            bearing: 0.0,
+          ),
+        ),
+      );
+    }
+  }
+
+  void _toggleNavMode() {
+    if (_isNavMode) {
+      _stopNavMode();
+    } else {
+      _startNavMode();
     }
   }
 
@@ -494,6 +601,14 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         bookingId: widget.booking['id'],
         status: status,
       );
+
+      _currentStatus = status; // Update local status immediately
+
+      if (status == 'en_route') {
+        _startNavMode();
+      } else if (status == 'arrived') {
+        _stopNavMode();
+      }
 
       // Force immediate location update for accurate ETA
       _updateLocation();
@@ -535,44 +650,58 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     }
   }
 
+  void _scheduleRouteFetch() {
+    _routeDebounceTimer?.cancel();
+    _routeDebounceTimer = Timer(
+      const Duration(milliseconds: 1500),
+      _fetchRoute,
+    );
+  }
+
   Future<void> _fetchRoute() async {
-    if (_currentPosition == null) return;
+    if (_currentPosition == null || _isFetchingRoute) return;
     if (_currentStatus != 'en_route' && _currentStatus != 'accepted') {
-      setState(() => _polylines = {});
+      if (_polylines.isNotEmpty) setState(() => _polylines = {});
       return;
     }
 
-    final details = await _apiService.getRouteDetails(
-      _currentPosition!,
-      _clientLocation,
-      mode: _selectedTravelMode,
-      avoidTolls: _avoidTolls,
-      avoidHighways: _avoidHighways,
-      avoidFerries: _avoidFerries,
-    );
+    _isFetchingRoute = true;
+    final LatLng fetchFrom = _currentPosition!;
+    try {
+      final details = await _apiService.getRouteDetails(
+        fetchFrom,
+        _clientLocation,
+        mode: _selectedTravelMode,
+        avoidTolls: _avoidTolls,
+        avoidHighways: _avoidHighways,
+        avoidFerries: _avoidFerries,
+      );
 
-    if (mounted && details.isNotEmpty) {
-      setState(() {
-        final List<LatLng> points = details['points'] != null
-            ? List<LatLng>.from(details['points'])
-            : [];
-        _routeSteps = details['steps'] ?? [];
-        _totalDistance = details['distance'] ?? '';
-        _totalDuration = details['duration'] ?? '';
-        _currentStepIndex = 0; // Reset for simplicity, could be optimized later
+      if (mounted && details.isNotEmpty) {
+        setState(() {
+          final List<LatLng> points = details['points'] != null
+              ? List<LatLng>.from(details['points'])
+              : [];
+          _totalDistance = details['distance'] ?? '';
+          _totalDuration = details['duration'] ?? '';
 
-        _polylines = {
-          Polyline(
-            polylineId: const PolylineId('route'),
-            points: points,
-            color: const Color(0xFF2196F3), // Bright Blue for road line
-            width: 8,
-            jointType: JointType.round,
-            startCap: Cap.roundCap,
-            endCap: Cap.roundCap,
-          ),
-        };
-      });
+          if (points.isNotEmpty) {
+            _polylines = {
+              Polyline(
+                polylineId: const PolylineId('route'),
+                points: points,
+                color: const Color(0xFF2196F3),
+                width: 8,
+                jointType: JointType.round,
+                startCap: Cap.roundCap,
+                endCap: Cap.roundCap,
+              ),
+            };
+          }
+        });
+      }
+    } finally {
+      _isFetchingRoute = false;
     }
   }
 
@@ -756,16 +885,25 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
               ),
               onMapCreated: (controller) => _mapController = controller,
               myLocationEnabled: true,
+              myLocationButtonEnabled: !_isNavMode,
+              padding: _isNavMode
+                  ? const EdgeInsets.only(top: 100)
+                  : EdgeInsets.zero,
               polylines: _polylines,
               markers: {
                 if (_currentPosition != null)
                   Marker(
                     markerId: const MarkerId('therapist'),
                     position: _currentPosition!,
+                    rotation: _isNavMode ? _bearing : 0,
+                    flat: _isNavMode,
+                    anchor: const Offset(0.5, 0.5),
                     infoWindow: const InfoWindow(title: 'Your Location'),
-                    icon: BitmapDescriptor.defaultMarkerWithHue(
-                      BitmapDescriptor.hueYellow,
-                    ),
+                    icon:
+                        _therapistMarkerIcon ??
+                        BitmapDescriptor.defaultMarkerWithHue(
+                          BitmapDescriptor.hueYellow,
+                        ),
                   ),
                 Marker(
                   markerId: const MarkerId('client'),
@@ -814,6 +952,27 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                         children: [
                           Expanded(child: _buildInfoRow()),
                           const SizedBox(width: 12),
+                          // External Maps Button
+                          if (_currentStatus == 'en_route')
+                            IconButton(
+                              onPressed: _launchExternalNavigation,
+                              icon: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.05),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.1),
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.map_outlined,
+                                  color: Colors.white70,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          const SizedBox(width: 4),
                           // Chat Button
                           IconButton(
                             onPressed: _showChatModal,
@@ -852,8 +1011,21 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                 child: _buildPreTripOverlay(),
               ),
             if (_currentStatus == 'en_route') ...[
-              _buildNavigationOverlay(),
-              _buildTripInfoOverlay(),
+              // Floating Center Button
+              Positioned(
+                bottom: 280, // Moved up to clear the taller info card
+                right: 16,
+                child: FloatingActionButton(
+                  mini: true,
+                  heroTag: "recenter",
+                  backgroundColor: Colors.black.withOpacity(0.7),
+                  onPressed: () => _updateLocation(),
+                  child: const Icon(
+                    Icons.my_location,
+                    color: Colors.blueAccent,
+                  ),
+                ),
+              ),
             ],
           ],
           if (_isLoading)
@@ -1247,13 +1419,28 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              Text(
-                _getFriendlyStatus(),
-                style: TextStyle(
-                  color: goldColor.withOpacity(0.8),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  if (_currentStatus != 'en_route')
+                    Text(
+                      _getFriendlyStatus(),
+                      style: TextStyle(
+                        color: goldColor.withOpacity(0.8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  if (_currentStatus == 'en_route' && _totalDuration.isNotEmpty)
+                    Text(
+                      '$_totalDuration ($_totalDistance)',
+                      style: const TextStyle(
+                        color: Colors.greenAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
@@ -1290,6 +1477,97 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         break;
       default:
         return const SizedBox.shrink();
+    }
+
+    if (_currentStatus == 'en_route') {
+      return Row(
+        children: [
+          // Nav Button
+          Expanded(
+            flex: 2,
+            child: InkWell(
+              onTap: _toggleNavMode,
+              child: Container(
+                height: 58,
+                decoration: BoxDecoration(
+                  color: _isNavMode
+                      ? Colors.redAccent.withOpacity(0.9)
+                      : Colors.blueAccent.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: (_isNavMode ? Colors.redAccent : Colors.blueAccent)
+                          .withOpacity(0.3),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _isNavMode ? Icons.close : Icons.navigation_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _isNavMode ? 'STOP' : 'NAV',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Arrived Button
+          Expanded(
+            flex: 3,
+            child: Container(
+              height: 58,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                gradient: LinearGradient(
+                  colors: [
+                    goldColor.withOpacity(0.8),
+                    goldColor,
+                    goldColor.withOpacity(0.9),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: ElevatedButton(
+                onPressed: () => _updateStatus(nextStatus),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                child: Text(
+                  text,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
     }
 
     return Container(
@@ -1443,43 +1721,27 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     );
   }
 
-  Widget _buildTripInfoOverlay() {
-    if (_totalDistance.isEmpty && _totalDuration.isEmpty) {
-      return const SizedBox.shrink();
-    }
+  Future<void> _launchExternalNavigation() async {
+    final lat = _clientLocation.latitude;
+    final lng = _clientLocation.longitude;
+    final url = Uri.parse('google.navigation:q=$lat,$lng&mode=d');
+    final appleUrl = Uri.parse('http://maps.apple.com/?daddr=$lat,$lng');
 
-    return Positioned(
-      bottom: 240,
-      right: 16,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: goldColor.withOpacity(0.3)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_totalDuration.isNotEmpty)
-              Text(
-                _totalDuration,
-                style: const TextStyle(
-                  color: Colors.green,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-            if (_totalDistance.isNotEmpty)
-              Text(
-                _totalDistance,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-              ),
-          ],
-        ),
-      ),
-    );
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      } else if (await canLaunchUrl(appleUrl)) {
+        await launchUrl(appleUrl);
+      } else {
+        // Fallback to browser
+        final webUrl = Uri.parse(
+          'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng',
+        );
+        await launchUrl(webUrl);
+      }
+    } catch (e) {
+      debugPrint('Could not launch maps: $e');
+    }
   }
 
   void _onTravelModeChanged(String newMode) {
@@ -1810,101 +2072,5 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         ],
       ),
     );
-  }
-
-  Widget _buildNavigationOverlay() {
-    if (_routeSteps.isEmpty || _currentStepIndex >= _routeSteps.length) {
-      return const SizedBox.shrink();
-    }
-
-    final step = _routeSteps[_currentStepIndex];
-    final instruction = _stripHtml(step['html_instructions'] ?? '');
-    final distance = step['distance']?['text'] ?? '';
-    final maneuver = step['maneuver'] ?? '';
-
-    return Positioned(
-      top: 16,
-      left: 16,
-      right: 16,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFF004D40), // Dark Google Maps green
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 15,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Icon(_getManeuverIcon(maneuver), color: Colors.white, size: 40),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    instruction,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (distance.isNotEmpty)
-                    Text(
-                      'Then in $distance',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 14,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _stripHtml(String htmlString) {
-    RegExp exp = RegExp(r"<[^>]*>", multiLine: true, caseSensitive: true);
-    return htmlString.replaceAll(exp, '');
-  }
-
-  IconData _getManeuverIcon(String maneuver) {
-    switch (maneuver) {
-      case 'turn-slight-left':
-      case 'turn-left':
-        return Icons.turn_left;
-      case 'turn-slight-right':
-      case 'turn-right':
-        return Icons.turn_right;
-      case 'turn-sharp-left':
-        return Icons.turn_sharp_left;
-      case 'turn-sharp-right':
-        return Icons.turn_sharp_right;
-      case 'uturn-left':
-      case 'uturn-right':
-        return Icons.u_turn_left;
-      case 'merge':
-        return Icons.merge;
-      case 'roundabout-left':
-      case 'roundabout-right':
-        return Icons.roundabout_right;
-      case 'straight':
-        return Icons.straight;
-      case 'ramp-left':
-      case 'ramp-right':
-        return Icons.ramp_right;
-      default:
-        return Icons.navigation;
-    }
   }
 }

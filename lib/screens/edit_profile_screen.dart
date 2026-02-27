@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import '../api_service.dart';
 import '../theme_provider.dart';
 import '../widgets/safe_network_image.dart';
+import '../widgets/luxury_success_modal.dart';
+import '../widgets/luxury_error_modal.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -65,9 +67,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _pickImage() async {
     final XFile? pickedFile = await _picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 800,
-      maxHeight: 800,
-      imageQuality: 85,
+      maxWidth: 600,
+      maxHeight: 600,
+      imageQuality: 70,
     );
 
     if (pickedFile != null) {
@@ -132,18 +134,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         widget.userData['user'] = updatedData['user'];
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile updated successfully!'),
-          backgroundColor: Colors.green,
+      showDialog(
+        context: context,
+        builder: (context) => LuxurySuccessModal(
+          title: 'PROFILE UPDATED',
+          message: 'Your personal information has been successfully updated.',
+          onConfirm: () {
+            Navigator.pop(context); // Close dialog
+            Navigator.pop(context, true); // Close screen
+          },
         ),
       );
-
-      Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+      showDialog(
+        context: context,
+        builder: (context) => LuxuryErrorModal(
+          title: 'UPDATE FAILED',
+          message: e.toString().replaceAll("Exception:", "").trim(),
+          onConfirm: () => Navigator.pop(context),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);

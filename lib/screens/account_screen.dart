@@ -437,8 +437,8 @@ class _AccountScreenState extends State<AccountScreen> {
                 ),
               ),
 
-              // JOIN VIP Promo Banner (Only if not VIP)
-              if (!isVip && !isActuallyPending)
+              // JOIN VIP Promo Banner (Only if not VIP and NOT a store)
+              if (!isVip && !isActuallyPending && tier != 'store')
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Container(
@@ -592,9 +592,11 @@ class _AccountScreenState extends State<AccountScreen> {
                   ),
                 ),
 
-              // VIP Status & Progress Section
-              const SizedBox(height: 24),
-              _buildVipProgressSection(provider, themeProvider),
+              // VIP Status & Progress Section (Hide for stores)
+              if (tier != 'store') ...[
+                const SizedBox(height: 24),
+                _buildVipProgressSection(provider, themeProvider),
+              ],
 
               // Store Management Section (Only for Store Tier)
               if (tier == 'store')
@@ -619,7 +621,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   ),
                 ], themeProvider),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 8),
 
               // Settings Sections
               _buildSection("Account", [

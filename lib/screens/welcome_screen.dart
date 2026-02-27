@@ -29,7 +29,8 @@ class WelcomeScreen extends StatefulWidget {
   State<WelcomeScreen> createState() => _WelcomeScreenState();
 }
 
-class _WelcomeScreenState extends State<WelcomeScreen> {
+class _WelcomeScreenState extends State<WelcomeScreen>
+    with WidgetsBindingObserver {
   final ApiService _apiService = ApiService();
   bool _isOnline = false;
   bool _isUpdating = false;
@@ -61,6 +62,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   int get _totalRequestCount =>
       _directRequestCount + _nearbyRequestCount + _storeRequestCount;
 
+  bool _hasShownInitialBalanceWarning = false;
+
   @override
   void initState() {
     super.initState();
@@ -72,6 +75,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) _checkWaiver();
     });
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('[WelcomeScreen] App resumed — Refreshing profile and wallet');
+      _fetchProfile();
+      _fetchDashboardStats();
+      _fetchTransactions();
+    }
   }
 
   void _initRealtimeListeners() {
@@ -139,8 +153,24 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               _checkActiveRequests(suppressNotification: true);
               _showBookingNotification(booking, isDirect: dynamicIsDirect);
             });
+
+            // Listen for User Notifications (Wallet updates, deposits, etc.)
+            final userId = widget.userData['user']?['id'];
+            if (userId != null) {
+              _apiService.listenForUserNotifications(userId, (notification) {
+                if (!mounted) return;
+                debugPrint(
+                  '[WelcomeScreen] 🔔 REAL-TIME User Notification received: $notification',
+                );
+                // Refresh profile and stats to update wallet balance immediately
+                _fetchProfile();
+                _fetchDashboardStats();
+                _fetchTransactions();
+              });
+            }
+
             debugPrint(
-              '[WelcomeScreen] Real-time listener active for provider $providerId',
+              '[WelcomeScreen] Real-time listeners active for provider $providerId and user $userId',
             );
           },
         )
@@ -152,6 +182,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _monitorPaymentTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -247,7 +279,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         if (mounted) {
           setState(() {
             _currentAddress =
-                provider['store_profile']['store_name'] ?? "Store Location";
+                provider['store_profile']['address'] ?? "Store Location";
           });
         }
       } else {
@@ -314,11 +346,118 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               isOnline: false,
             );
           }
+
+          // Show initial login warning if balance is low
+          if (!_hasShownInitialBalanceWarning && _walletBalance < 1000) {
+            _hasShownInitialBalanceWarning = true;
+            Future.delayed(const Duration(seconds: 1), () {
+              if (mounted) _showBalanceRequirementDialog();
+            });
+          }
         });
       }
     } catch (e) {
       print('Error fetching profile: $e');
     }
+  }
+
+  void _showBalanceRequirementDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: Color(0xFFD4AF37), width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD4AF37).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: Color(0xFFD4AF37),
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                "MAINTAINING BALANCE",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFFD4AF37),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.0,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "To receive booking requests and stay visible to clients, your wallet must have a minimum balance of ₱1,000.00.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "Current Balance: ₱${_walletBalance.toStringAsFixed(2)}",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    gradient: const LinearGradient(
+                      colors: [
+                        Color(0xFFB8860B),
+                        Color(0xFFD4AF37),
+                        Color(0xFFFFD700),
+                      ],
+                    ),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      "UNDERSTOOD",
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _fetchTransactions() async {
@@ -1455,21 +1594,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      user?['customer_tier'] == 'store'
-                          ? Icons.storefront
-                          : Icons.location_on,
-                      color: goldColor,
-                      size: 14,
-                    ),
+                    Icon(Icons.location_on, color: goldColor, size: 14),
                     const SizedBox(width: 6),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 120),
                       child: Text(
-                        user?['customer_tier'] == 'store'
-                            ? (widget.userData['provider']?['store_profile']?['store_name'] ??
-                                  'Store')
-                            : _currentAddress,
+                        _currentAddress,
                         style: TextStyle(
                           color: textColor.withOpacity(0.7),
                           fontSize: 12,
@@ -1487,11 +1617,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               // Online Toggle (Right)
               Container(
                 padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  // Border removed per user request
-                ),
                 child: Row(
                   children: [
                     Container(

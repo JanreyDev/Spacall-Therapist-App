@@ -23,6 +23,7 @@ class StaffDetailsScreen extends StatefulWidget {
 class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
   final ApiService _apiService = ApiService();
   late Map<String, dynamic> _staff;
+  bool _isDeleting = false;
 
   @override
   void initState() {
@@ -43,7 +44,7 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
         }
       },
       (deletedId) {
-        if (!mounted) return;
+        if (!mounted || _isDeleting) return;
         if (deletedId == _staff['id']) {
           Navigator.pop(context, true);
         }
@@ -55,45 +56,56 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF141414),
+        backgroundColor: const Color(0xFF0A0A0A),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
         title: const Text(
-          'DELETE STAFF',
+          'REMOVE PROFESSIONAL',
           style: TextStyle(
             color: Color(0xFFEBC14F),
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+            letterSpacing: 2,
           ),
         ),
         content: const Text(
-          'Are you sure you want to remove this therapist from your store?',
-          style: TextStyle(color: Colors.white70),
+          'Are you sure you want to remove this therapist profile? This action is permanent.',
+          style: TextStyle(color: Colors.white60, fontSize: 13),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: const Text(
               'CANCEL',
-              style: TextStyle(color: Colors.white38),
+              style: TextStyle(color: Colors.white24),
             ),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text('DELETE', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'REMOVE',
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
+      if (!mounted) return;
+      setState(() => _isDeleting = true);
       _showLoading();
       try {
         await _apiService.deleteStoreStaff(widget.token, _staff['id']);
         if (!mounted) return;
-        Navigator.pop(context); // Close loading
-        Navigator.pop(context, true); // Go back with refresh signal
+        Navigator.of(context, rootNavigator: true).pop(); // Close loading
+        Navigator.pop(context, true); // Return to list
       } catch (e) {
         if (!mounted) return;
-        Navigator.pop(context); // Close loading
+        setState(() => _isDeleting = false);
+        Navigator.of(context, rootNavigator: true).pop(); // Close loading
         _showError(e.toString());
       }
     }
@@ -115,10 +127,10 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
         builder: (modalContext, setModalState) => Container(
           height: MediaQuery.of(context).size.height * 0.85,
           decoration: const BoxDecoration(
-            color: Color(0xFF0A0A0A),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            color: Color(0xFF050505),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(0)),
           ),
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -126,21 +138,21 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    'EDIT THERAPIST',
+                    'EDIT DOSSIER',
                     style: TextStyle(
                       color: Color(0xFFEBC14F),
-                      fontSize: 20,
+                      fontSize: 14,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
+                      letterSpacing: 4,
                     ),
                   ),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: Colors.white54),
+                    icon: const Icon(Icons.close, color: Colors.white24),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
@@ -150,24 +162,25 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
                           final picker = ImagePicker();
                           final img = await picker.pickImage(
                             source: ImageSource.gallery,
+                            maxWidth: 800,
+                            maxHeight: 1200,
+                            imageQuality: 85,
                           );
                           if (img != null) {
                             setModalState(() => selectedImage = img);
                           }
                         },
                         child: Container(
-                          width: 100,
-                          height: 100,
+                          width: 140,
+                          height: 180,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
-                            shape: BoxShape.circle,
+                            color: Colors.white.withOpacity(0.02),
                             border: Border.all(
-                              color: const Color(0xFFEBC14F).withOpacity(0.3),
+                              color: const Color(0xFFEBC14F).withOpacity(0.2),
                             ),
                           ),
                           child: (selectedImage != null)
                               ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(50),
                                   child: kIsWeb
                                       ? Image.network(
                                           selectedImage!.path,
@@ -179,41 +192,40 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
                                         ),
                                 )
                               : (_staff['profile_photo_url'] != null)
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(50),
-                                  child: Image.network(
-                                    ApiService.normalizePhotoUrl(
-                                      _staff['profile_photo_url'],
-                                    )!,
-                                    fit: BoxFit.cover,
-                                  ),
+                              ? Image.network(
+                                  ApiService.normalizePhotoUrl(
+                                    _staff['profile_photo_url'],
+                                  )!,
+                                  fit: BoxFit.cover,
                                 )
-                              : const Icon(
-                                  Icons.add_a_photo_outlined,
-                                  color: Color(0xFFEBC14F),
-                                  size: 30,
+                              : const Center(
+                                  child: Icon(
+                                    Icons.add_a_photo_outlined,
+                                    color: Color(0xFFEBC14F),
+                                    size: 30,
+                                  ),
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 32),
                       _buildTextField(
                         nameController,
-                        'FULL NAME',
+                        'PROFESSIONAL NAME',
                         Icons.person_outline,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       _buildTextField(
                         expController,
-                        'YEARS OF EXPERIENCE',
-                        Icons.star_outline,
+                        'YEARS OF EXPERTISE',
+                        Icons.workspace_premium_outlined,
                         isNumber: true,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
                       _buildTextField(
                         bioController,
-                        'BIO / DESCRIPTION',
-                        Icons.description_outlined,
-                        maxLines: 3,
+                        'PROFESSIONAL BIOGRAPHY',
+                        Icons.menu_book_outlined,
+                        maxLines: 5,
                       ),
                     ],
                   ),
@@ -225,9 +237,7 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
                 height: 56,
                 child: ElevatedButton(
                   onPressed: () async {
-                    if (nameController.text.isEmpty ||
-                        expController.text.isEmpty)
-                      return;
+                    if (nameController.text.isEmpty) return;
                     Navigator.pop(modalContext);
                     _showLoading();
                     try {
@@ -241,32 +251,30 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
                         photo: selectedImage,
                       );
                       if (!mounted) return;
-                      Navigator.pop(context); // Close loading
-                      setState(() {
-                        _staff = response;
-                      });
+                      Navigator.of(context, rootNavigator: true).pop();
+                      setState(() => _staff = response);
                       _showSuccess(
-                        'STAFF UPDATED',
-                        'Staff profile has been updated successfully.',
+                        'DOSSIER UPDATED',
+                        'The professional profile has been refined.',
                       );
                     } catch (e) {
                       if (!mounted) return;
-                      Navigator.pop(context); // Close loading
+                      Navigator.of(context, rootNavigator: true).pop();
                       _showError(e.toString());
                     }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFEBC14F),
                     foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.zero,
                     ),
                   ),
                   child: const Text(
-                    'UPDATE PROFILE',
+                    'SAVE CHANGES',
                     style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2,
                     ),
                   ),
                 ),
@@ -292,30 +300,33 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
         Text(
           label,
           style: const TextStyle(
-            color: Colors.white54,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
+            color: Color(0xFFEBC14F),
+            fontSize: 9,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         TextField(
           controller: controller,
           keyboardType: isNumber ? TextInputType.number : TextInputType.text,
           maxLines: maxLines,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: InputDecoration(
-            prefixIcon: Icon(icon, color: const Color(0xFFEBC14F), size: 20),
+            prefixIcon: Icon(
+              icon,
+              color: const Color(0xFFEBC14F).withOpacity(0.5),
+              size: 18,
+            ),
             filled: true,
-            fillColor: Colors.white.withOpacity(0.03),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
+            fillColor: Colors.white.withOpacity(0.02),
+            enabledBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: Colors.white.withOpacity(0.05)),
             ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
+            focusedBorder: const OutlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFFEBC14F)),
             ),
+            contentPadding: const EdgeInsets.all(20),
           ),
         ),
       ],
@@ -345,30 +356,27 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message.replaceAll("Exception:", ""))),
+      SnackBar(
+        backgroundColor: const Color(0xFF1A1A1A),
+        content: Text(
+          message.replaceAll("Exception:", ""),
+          style: const TextStyle(color: Colors.redAccent),
+        ),
+      ),
     );
   }
 
   Future<void> _toggleStatus() async {
-    // Optimistic Update
     final originalStatus = _staff['is_active'];
-    setState(() {
-      _staff['is_active'] = !originalStatus;
-    });
-
+    setState(() => _staff['is_active'] = !originalStatus);
     try {
       final updated = await _apiService.toggleStoreStaffStatus(
         widget.token,
         _staff['id'],
       );
-      setState(() {
-        _staff = updated;
-      });
+      setState(() => _staff = updated);
     } catch (e) {
-      // Revert on error
-      setState(() {
-        _staff['is_active'] = originalStatus;
-      });
+      setState(() => _staff['is_active'] = originalStatus);
       _showError(e.toString());
     }
   }
@@ -376,267 +384,375 @@ class _StaffDetailsScreenState extends State<StaffDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final isActive = _staff['is_active'] == true;
+    const goldColor = Color(0xFFEBC14F);
+    final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // Hero Image / Background
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: MediaQuery.of(context).size.height * 0.45,
-            child: Container(
-              decoration: BoxDecoration(
-                image: _staff['profile_photo_url'] != null
-                    ? DecorationImage(
-                        image: NetworkImage(
-                          ApiService.normalizePhotoUrl(
-                            _staff['profile_photo_url'],
-                          )!,
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverAppBar(
+                expandedHeight: size.height * 0.7,
+                backgroundColor: Colors.black,
+                elevation: 0,
+                pinned: true,
+                stretch: true,
+                automaticallyImplyLeading: false,
+                flexibleSpace: FlexibleSpaceBar(
+                  collapseMode: CollapseMode.pin,
+                  background: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _staff['profile_photo_url'] != null
+                          ? Image.network(
+                              ApiService.normalizePhotoUrl(
+                                _staff['profile_photo_url'],
+                              )!,
+                              fit: BoxFit.cover,
+                            )
+                          : Container(
+                              color: const Color(0xFF0D0D0D),
+                              child: const Icon(
+                                Icons.person,
+                                size: 120,
+                                color: Colors.white10,
+                              ),
+                            ),
+
+                      const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: [0.0, 0.4, 0.75, 1.0],
+                            colors: [
+                              Colors.black26,
+                              Colors.transparent,
+                              Colors.black87,
+                              Colors.black,
+                            ],
+                          ),
                         ),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-                color: const Color(0xFF1A1A1A),
-              ),
-              child: _staff['profile_photo_url'] == null
-                  ? const Center(
-                      child: Icon(
-                        Icons.person,
-                        color: Color(0xFFEBC14F),
-                        size: 120,
                       ),
-                    )
-                  : null,
-            ),
-          ),
-          // Gradient Overlay for Hero
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: MediaQuery.of(context).size.height * 0.45,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.6),
-                    Colors.transparent,
-                    const Color(0xFF0A0A0A).withOpacity(0.8),
-                    const Color(0xFF0A0A0A),
-                  ],
+
+                      Positioned(
+                        bottom: 80,
+                        left: 24,
+                        right: 24,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'OFFICIAL PROFESSIONAL',
+                              style: TextStyle(
+                                color: goldColor,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 8,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _staff['name'].toString().toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 44,
+                                fontWeight: FontWeight.w200,
+                                letterSpacing: 1,
+                                height: 0.9,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Container(height: 1, width: 60, color: goldColor),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
+
+              SliverToBoxAdapter(
+                child: Container(
+                  color: Colors.black,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 40,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'EXPERTISE',
+                                  style: TextStyle(
+                                    color: Colors.white24,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 3,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${_staff['years_of_experience']} YEARS PROFESSIONAL',
+                                  style: const TextStyle(
+                                    color: Color(0xFFEBC14F),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w300,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const Text(
+                                'STATUS',
+                                style: TextStyle(
+                                  color: Colors.white24,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 3,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  _StatusPulse(isActive: isActive),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    isActive ? 'ON-DUTY' : 'OFF-DUTY',
+                                    style: TextStyle(
+                                      color: isActive
+                                          ? Colors.white
+                                          : Colors.white24,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 60),
+
+                      const Text(
+                        'BIOGRAPHICAL DOSSIER',
+                        style: TextStyle(
+                          color: goldColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 4,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      Text(
+                        _staff['bio'] ?? 'No formal biography provided.',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.5),
+                          fontSize: 15,
+                          height: 2.0,
+                          fontFamily: 'Serif',
+                          fontWeight: FontWeight.w300,
+                        ),
+                      ),
+
+                      const SizedBox(height: 60),
+
+                      GestureDetector(
+                        onTap: _toggleStatus,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 600),
+                          width: double.infinity,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0A0A0A),
+                            border: Border.all(
+                              color: isActive ? goldColor : Colors.white10,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                isActive
+                                    ? 'SET SESSION TO OFFLINE'
+                                    : 'ACTIVATE FOR SERVICE',
+                                style: TextStyle(
+                                  color: isActive ? goldColor : Colors.white24,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 11,
+                                  letterSpacing: 5,
+                                ),
+                              ),
+                              if (isActive) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  width: 40,
+                                  height: 1,
+                                  color: goldColor.withOpacity(0.3),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 50),
+
+                      const Center(
+                        child: Opacity(
+                          opacity: 0.05,
+                          child: Text(
+                            'SPACALL EXCLUSIVE',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w100,
+                              letterSpacing: 10,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 100),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          // Back Button
+
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             left: 20,
-            child: GestureDetector(
-              onTap: () => Navigator.pop(context, true),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.black45,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: const Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
-          ),
-          // Actions Button
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 10,
             right: 20,
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                GestureDetector(
-                  onTap: _showEditStaffDialog,
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.black45,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: const Icon(
-                      Icons.edit_outlined,
-                      color: Color(0xFFEBC14F),
-                      size: 20,
-                    ),
-                  ),
+                _HeaderButton(
+                  icon: Icons.arrow_back_ios_new_rounded,
+                  onTap: () => Navigator.pop(context, true),
                 ),
-                const SizedBox(width: 10),
-                GestureDetector(
-                  onTap: _deleteStaff,
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.black45,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white10),
+                Row(
+                  children: [
+                    _HeaderButton(
+                      icon: Icons.edit_outlined,
+                      onTap: _showEditStaffDialog,
                     ),
-                    child: const Icon(
-                      Icons.delete_outline_rounded,
-                      color: Colors.redAccent,
-                      size: 20,
+                    const SizedBox(width: 12),
+                    _HeaderButton(
+                      icon: Icons.delete_outline_rounded,
+                      iconColor: Colors.redAccent.withOpacity(0.8),
+                      onTap: _deleteStaff,
                     ),
-                  ),
+                  ],
                 ),
               ],
-            ),
-          ),
-          // Content
-          Positioned.fill(
-            top: MediaQuery.of(context).size.height * 0.38,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Name & Exp Card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(32),
-                      color: const Color(0xFF141414),
-                      border: Border.all(color: Colors.white.withOpacity(0.05)),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          _staff['name'].toString().toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2.0,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.verified_user_rounded,
-                              size: 14,
-                              color: Color(0xFFEBC14F),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '${_staff['years_of_experience']} Years Professional Experience',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.5),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  // Status Section
-                  _buildSectionHeader('AVAILABILITY STATUS'),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      color: Colors.white.withOpacity(0.03),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 12,
-                              height: 12,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isActive
-                                    ? Colors.greenAccent
-                                    : Colors.white24,
-                                boxShadow: isActive
-                                    ? [
-                                        BoxShadow(
-                                          color: Colors.greenAccent.withOpacity(
-                                            0.4,
-                                          ),
-                                          blurRadius: 8,
-                                        ),
-                                      ]
-                                    : null,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              isActive
-                                  ? 'ACTIVE & BOOKABLE'
-                                  : 'OFFLINE / UNAVAILABLE',
-                              style: TextStyle(
-                                color: isActive ? Colors.white : Colors.white38,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Switch.adaptive(
-                          value: isActive,
-                          onChanged: (_) => _toggleStatus(),
-                          activeColor: const Color(0xFFEBC14F),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  // Bio Section
-                  _buildSectionHeader('PROFESSIONAL BIO'),
-                  const SizedBox(height: 16),
-                  Text(
-                    _staff['bio'] ?? 'No bio provided.',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 15,
-                      height: 1.6,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 100), // Bottom padding
-                ],
-              ),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        color: Color(0xFFEBC14F),
-        fontSize: 11,
-        fontWeight: FontWeight.w900,
-        letterSpacing: 1.5,
+class _HeaderButton extends StatelessWidget {
+  final IconData icon;
+  final Color? iconColor;
+  final VoidCallback onTap;
+  const _HeaderButton({
+    required this.icon,
+    this.iconColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.5),
+          border: Border.all(color: Colors.white.withOpacity(0.05)),
+        ),
+        child: Icon(icon, color: iconColor ?? Colors.white70, size: 16),
+      ),
+    );
+  }
+}
+
+class _StatusPulse extends StatefulWidget {
+  final bool isActive;
+  const _StatusPulse({required this.isActive});
+
+  @override
+  State<_StatusPulse> createState() => _StatusPulseState();
+}
+
+class _StatusPulseState extends State<_StatusPulse>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isActive)
+      return Container(
+        width: 8,
+        height: 8,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white10,
+        ),
+      );
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) => Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.greenAccent.withOpacity(
+            0.1 + (_controller.value * 0.2),
+          ),
+        ),
+        child: Container(
+          width: 6,
+          height: 6,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.greenAccent,
+          ),
+        ),
       ),
     );
   }

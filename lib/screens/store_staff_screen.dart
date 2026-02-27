@@ -158,6 +158,9 @@ class _StoreStaffScreenState extends State<StoreStaffScreen> {
                           final picker = ImagePicker();
                           final img = await picker.pickImage(
                             source: ImageSource.gallery,
+                            maxWidth: 600,
+                            maxHeight: 600,
+                            imageQuality: 70,
                           );
                           if (img != null) {
                             setModalState(() => selectedImage = img);

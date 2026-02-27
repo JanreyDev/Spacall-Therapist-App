@@ -589,25 +589,33 @@ class ApiService {
     String? description,
     String? city,
     String? province,
+    String? photoPath,
   }) async {
     try {
       final url = '$baseUrl/therapist/store-profile';
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'store_name': storeName,
-          'address': address,
-          'latitude': latitude,
-          'longitude': longitude,
-          if (description != null) 'description': description,
-          if (city != null) 'city': city,
-          if (province != null) 'province': province,
-        }),
-      );
+      final request = http.MultipartRequest('POST', Uri.parse(url));
+
+      request.headers.addAll({
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      });
+
+      request.fields['store_name'] = storeName;
+      request.fields['address'] = address;
+      request.fields['latitude'] = latitude.toString();
+      request.fields['longitude'] = longitude.toString();
+      if (description != null) request.fields['description'] = description;
+      if (city != null) request.fields['city'] = city;
+      if (province != null) request.fields['province'] = province;
+
+      if (photoPath != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath('photo', photoPath),
+        );
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);

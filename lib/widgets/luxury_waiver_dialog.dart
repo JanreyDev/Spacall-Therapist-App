@@ -25,7 +25,7 @@ class _LuxuryWaiverDialogState extends State<LuxuryWaiverDialog> {
         child: Container(
           width: double.infinity,
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.8,
+            maxHeight: MediaQuery.of(context).size.height * 0.9,
           ),
           decoration: BoxDecoration(
             color: const Color(0xFF1E1E1E),
@@ -103,7 +103,7 @@ class _LuxuryWaiverDialogState extends State<LuxuryWaiverDialog> {
                   thumbVisibility: true,
                   child: SingleChildScrollView(
                     controller: _scrollController,
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.fromLTRB(24, 24, 32, 40),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -227,7 +227,7 @@ class _LuxuryWaiverDialogState extends State<LuxuryWaiverDialog> {
                     const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
-                      height: 50,
+                      height: 54, // Slightly taller for premium feel
                       child: ElevatedButton(
                         onPressed: _isAccepted ? widget.onAccepted : null,
                         style: ElevatedButton.styleFrom(
@@ -241,10 +241,13 @@ class _LuxuryWaiverDialogState extends State<LuxuryWaiverDialog> {
                         ),
                         child: Text(
                           "ACCESS DASHBOARD",
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.5,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
                             color: _isAccepted ? Colors.black : Colors.white30,
                           ),
                         ),

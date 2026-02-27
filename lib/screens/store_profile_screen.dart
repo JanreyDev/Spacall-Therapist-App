@@ -1,9 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../api_service.dart';
 import '../theme_provider.dart';
+import '../widgets/luxury_success_modal.dart';
+import '../widgets/luxury_error_modal.dart';
+import '../widgets/safe_network_image.dart';
 
 class StoreProfileScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -26,6 +31,8 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
   double? _longitude;
   String? _city;
   String? _province;
+  String? _existingPhotoUrl;
+  File? _selectedImage;
   bool _isLoading = false;
   bool _isGettingLocation = false;
 
@@ -42,6 +49,11 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     );
     _latitude = double.tryParse(storeProfile['latitude']?.toString() ?? '');
     _longitude = double.tryParse(storeProfile['longitude']?.toString() ?? '');
+
+    final photos = storeProfile['photos'];
+    if (photos != null && photos is List && photos.isNotEmpty) {
+      _existingPhotoUrl = photos[0];
+    }
   }
 
   @override
@@ -87,10 +99,12 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Error getting location: $e"),
-            backgroundColor: Colors.red,
+        showDialog(
+          context: context,
+          builder: (context) => LuxuryErrorModal(
+            title: 'LOCATION ERROR',
+            message: e.toString().replaceAll("Exception:", "").trim(),
+            onConfirm: () => Navigator.pop(context),
           ),
         );
       }
@@ -99,13 +113,28 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
     }
   }
 
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+    if (pickedFile != null) {
+      setState(() {
+        _selectedImage = File(pickedFile.path);
+      });
+    }
+  }
+
   Future<void> _saveStoreProfile() async {
     if (!_formKey.currentState!.validate()) return;
     if (_latitude == null || _longitude == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please set the store location coordinates first."),
-          backgroundColor: Colors.orange,
+      showDialog(
+        context: context,
+        builder: (context) => LuxuryErrorModal(
+          title: 'REQUIRED FIELD',
+          message: 'Please set the store location coordinates first.',
+          onConfirm: () => Navigator.pop(context),
         ),
       );
       return;
@@ -123,6 +152,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
         description: _descriptionController.text.trim(),
         city: _city,
         province: _province,
+        photoPath: _selectedImage?.path,
       );
 
       if (!mounted) return;
@@ -135,18 +165,26 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
         widget.userData['provider']['store_profile'] = result['store_profile'];
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Store Profile updated successfully!'),
-          backgroundColor: Colors.green,
+      showDialog(
+        context: context,
+        builder: (context) => LuxurySuccessModal(
+          title: 'PROFILE UPDATED',
+          message: 'Store settings have been successfully saved.',
+          onConfirm: () {
+            Navigator.pop(context); // Close dialog
+            Navigator.pop(context, true); // Close screen
+          },
         ),
       );
-
-      Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        showDialog(
+          context: context,
+          builder: (context) => LuxuryErrorModal(
+            title: 'UPDATE FAILED',
+            message: e.toString().replaceAll("Exception:", "").trim(),
+            onConfirm: () => Navigator.pop(context),
+          ),
         );
       }
     } finally {
@@ -186,6 +224,66 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Store Thumbnail
+              Center(
+                child: Stack(
+                  children: [
+                    Container(
+                      width: 140,
+                      height: 140,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: goldColor, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: goldColor.withOpacity(0.2),
+                            blurRadius: 15,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: _selectedImage != null
+                            ? Image.file(_selectedImage!, fit: BoxFit.cover)
+                            : SafeNetworkImage(
+                                url: _existingPhotoUrl ?? '',
+                                fit: BoxFit.cover,
+                                placeholder: Icon(
+                                  Icons.store,
+                                  size: 50,
+                                  color: goldColor.withOpacity(0.5),
+                                ),
+                              ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: GestureDetector(
+                        onTap: _isGettingLocation ? null : _pickImage,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: goldColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: backgroundColor,
+                              width: 2,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            size: 20,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+
               Text(
                 "Establishment Details",
                 style: TextStyle(

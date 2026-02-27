@@ -323,6 +323,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     _countdownTimer?.cancel();
     _routeDebounceTimer?.cancel();
     _positionStream?.cancel();
+    _mapController?.dispose();
     _messageController.dispose();
     _chatScrollController.dispose();
     _audioPlayer.dispose();
@@ -531,21 +532,26 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     );
 
     if (_mapController != null && _currentPosition != null) {
-      if (_isNavMode) {
-        _mapController!.animateCamera(
-          CameraUpdate.newCameraPosition(
-            CameraPosition(
-              target: _currentPosition!,
-              zoom: 18.5,
-              tilt: 60.0,
-              bearing: _bearing,
+      try {
+        if (_isNavMode) {
+          _mapController!.animateCamera(
+            CameraUpdate.newCameraPosition(
+              CameraPosition(
+                target: _currentPosition!,
+                zoom: 18.5,
+                tilt: 60.0,
+                bearing: _bearing,
+              ),
             ),
-          ),
-        );
-      } else {
-        _mapController!.animateCamera(
-          CameraUpdate.newLatLng(_currentPosition!),
-        );
+          );
+        } else {
+          _mapController!.animateCamera(
+            CameraUpdate.newLatLng(_currentPosition!),
+          );
+        }
+      } catch (e) {
+        debugPrint('Skipping map animation: map is unmounted');
+        _mapController = null;
       }
     }
   }
@@ -572,16 +578,21 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     setState(() => _isNavMode = false);
 
     if (_mapController != null && _currentPosition != null) {
-      _mapController!.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target: _currentPosition!,
-            zoom: 15.0,
-            tilt: 0.0,
-            bearing: 0.0,
+      try {
+        _mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: _currentPosition!,
+              zoom: 15.0,
+              tilt: 0.0,
+              bearing: 0.0,
+            ),
           ),
-        ),
-      );
+        );
+      } catch (e) {
+        debugPrint('Skipping map animation on stop: map is unmounted');
+        _mapController = null;
+      }
     }
   }
 
@@ -608,6 +619,8 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         _startNavMode();
       } else if (status == 'arrived') {
         _stopNavMode();
+        _mapController =
+            null; // Important: Clear it when we transition out of map view
       }
 
       // Force immediate location update for accurate ETA
@@ -631,10 +644,12 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
           startedAt: DateTime.now().toIso8601String(),
         );
       }
-      if (status == 'completed' ||
-          status == 'cancelled' ||
-          status == 'arrived') {
+      if (status == 'completed' || status == 'cancelled') {
         if (mounted) Navigator.pop(context, 'switch_to_sessions');
+      }
+
+      if (status == 'arrived') {
+        if (mounted) _showArrivedModal();
       }
     } catch (e) {
       if (!mounted) return;
@@ -850,6 +865,155 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
     );
   }
 
+  void _showArrivedModal() {
+    int prepSeconds = 600; // 10 minutes
+    Timer? prepTimer;
+
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            // Start timer when modal opens
+            if (prepTimer == null) {
+              prepTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+                if (prepSeconds > 0) {
+                  setModalState(() => prepSeconds--);
+                } else {
+                  timer.cancel();
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                    _updateStatus('in_progress');
+                  }
+                }
+              });
+            }
+
+            final mins = (prepSeconds ~/ 60).toString().padLeft(2, '0');
+            final secs = (prepSeconds % 60).toString().padLeft(2, '0');
+
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Animation Placeholder (massaging/preparing)
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: goldColor.withOpacity(0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        const Icon(
+                          Icons.spa_rounded,
+                          color: goldColor,
+                          size: 56,
+                        ),
+                        // Simple pulsing ring effect simulation using a CircularProgressIndicator
+                        SizedBox(
+                          width: 120,
+                          height: 120,
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              goldColor.withOpacity(0.4),
+                            ),
+                            strokeWidth: 2,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 100,
+                          height: 100,
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              goldColor,
+                            ),
+                            strokeWidth: 4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  const Text(
+                    "PREPARING FOR SESSION",
+                    style: TextStyle(
+                      color: goldColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Please prepare your equipment and the massage area. You have 10 minutes before the session starts.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 48),
+                  Text(
+                    "$mins:$secs",
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      color: Colors.white,
+                      fontSize: 64,
+                      fontWeight: FontWeight.w200,
+                      letterSpacing: -2,
+                    ),
+                  ),
+                  const SizedBox(height: 48),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 64,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        prepTimer?.cancel();
+                        Navigator.pop(context);
+                        _updateStatus('in_progress');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: goldColor,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: const Text(
+                        "READY NOW",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).then((_) {
+      prepTimer?.cancel();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // If en_route, show Map. Otherwise (arrived, in_progress), show details.
@@ -918,7 +1082,13 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
               },
             )
           else
-            _buildDetailsView(goldColor),
+            Builder(
+              builder: (context) {
+                _mapController =
+                    null; // Ensure we don't hold a reference to the disposed map
+                return _buildDetailsView(goldColor);
+              },
+            ),
 
           if (showMap)
             Positioned(

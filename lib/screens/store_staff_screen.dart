@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:spacall_therapist_app/api_service.dart';
 import 'package:spacall_therapist_app/widgets/luxury_success_modal.dart';
+import 'package:spacall_therapist_app/screens/staff_details_screen.dart';
 
 class StoreStaffScreen extends StatefulWidget {
   final String token;
@@ -34,17 +35,70 @@ class _StoreStaffScreenState extends State<StoreStaffScreen> {
         _staff = staff;
         _isLoading = false;
       });
+
+      // Initialize WebSocket listener
+      if (staff.isNotEmpty) {
+        final storeId = staff.first['store_profile_id'];
+        _setupWebSocket(storeId);
+      } else {
+        // Fetch store profile to get the ID if staff list is empty
+        final profile = await _apiService.getStoreProfile(widget.token);
+        if (profile.containsKey('id')) {
+          _setupWebSocket(profile['id']);
+        }
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       _showError(e.toString());
     }
   }
 
+  void _setupWebSocket(int storeId) {
+    _apiService.listenForStoreStaffUpdates(
+      storeId,
+      (updatedStaff) {
+        if (!mounted) return;
+        setState(() {
+          final index = _staff.indexWhere((s) => s['id'] == updatedStaff['id']);
+          if (index != -1) {
+            _staff[index] = updatedStaff;
+          } else {
+            _staff.insert(0, updatedStaff);
+          }
+        });
+      },
+      (deletedId) {
+        if (!mounted) return;
+        setState(() {
+          _staff.removeWhere((s) => s['id'] == deletedId);
+        });
+      },
+    );
+  }
+
   Future<void> _toggleStatus(int id) async {
+    // Optimistic Update
+    final index = _staff.indexWhere((s) => s['id'] == id);
+    if (index == -1) return;
+
+    final originalStatus = _staff[index]['is_active'];
+    setState(() {
+      _staff[index]['is_active'] = !originalStatus;
+    });
+
     try {
-      await _apiService.toggleStoreStaffStatus(widget.token, id);
-      _fetchStaff();
+      final updated = await _apiService.toggleStoreStaffStatus(
+        widget.token,
+        id,
+      );
+      setState(() {
+        _staff[index] = updated;
+      });
     } catch (e) {
+      // Revert on error
+      setState(() {
+        _staff[index]['is_active'] = originalStatus;
+      });
       _showError(e.toString());
     }
   }
@@ -292,34 +346,83 @@ class _StoreStaffScreenState extends State<StoreStaffScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
-      appBar: AppBar(
-        title: const Text(
-          'STAFF MANAGEMENT',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 16,
-            letterSpacing: 1.5,
-          ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFFEBC14F),
+                      ),
+                    )
+                  : _staff.isEmpty
+                  ? _buildEmptyState()
+                  : _buildStaffList(),
+            ),
+          ],
         ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: _showAddStaffDialog,
-            icon: const Icon(
-              Icons.add_circle_outline,
-              color: Color(0xFFEBC14F),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A0A0A),
+        border: Border(
+          bottom: BorderSide(color: Colors.white.withOpacity(0.05), width: 1),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'STAFF MANAGEMENT',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 22,
+                  letterSpacing: 2.0,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${_staff.length} Professionals Active',
+                style: TextStyle(
+                  color: const Color(0xFFEBC14F).withOpacity(0.8),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          GestureDetector(
+            onTap: _showAddStaffDialog,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEBC14F).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFFEBC14F).withOpacity(0.3),
+                ),
+              ),
+              child: const Icon(
+                Icons.add_rounded,
+                color: Color(0xFFEBC14F),
+                size: 24,
+              ),
             ),
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFEBC14F)),
-            )
-          : _staff.isEmpty
-          ? _buildEmptyState()
-          : _buildStaffList(),
     );
   }
 
@@ -362,89 +465,180 @@ class _StoreStaffScreenState extends State<StoreStaffScreen> {
 
   Widget _buildStaffList() {
     return ListView.builder(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       itemCount: _staff.length,
       itemBuilder: (context, index) {
         final member = _staff[index];
         final isActive = member['is_active'] == true;
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.03),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withOpacity(0.05)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  image: member['profile_photo_url'] != null
-                      ? DecorationImage(
-                          image: NetworkImage(
-                            ApiService.normalizePhotoUrl(
-                              member['profile_photo_url'],
-                            )!,
-                          ),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                  color: Colors.white.withOpacity(0.05),
-                ),
-                child: member['profile_photo_url'] == null
-                    ? const Icon(Icons.person, color: Color(0xFFEBC14F))
-                    : null,
+        return GestureDetector(
+          onTap: () async {
+            final refresh = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    StaffDetailsScreen(token: widget.token, staff: member),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      member['name'].toString().toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 14,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${member['years_of_experience']} Years Exp.',
-                      style: TextStyle(
-                        color: const Color(0xFFEBC14F).withOpacity(0.7),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                children: [
-                  Text(
-                    isActive ? 'ACTIVE' : 'INACTIVE',
-                    style: TextStyle(
-                      color: isActive ? Colors.greenAccent : Colors.white38,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Switch.adaptive(
-                    value: isActive,
-                    onChanged: (_) => _toggleStatus(member['id']),
-                    activeColor: const Color(0xFFEBC14F),
-                  ),
+            );
+            if (refresh == true) {
+              _fetchStaff();
+            }
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white.withOpacity(0.06),
+                  Colors.white.withOpacity(0.02),
                 ],
               ),
-            ],
+              border: Border.all(
+                color: Colors.white.withOpacity(0.05),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 70,
+                        height: 70,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFFEBC14F).withOpacity(0.4),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFEBC14F).withOpacity(0.1),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(35),
+                          child: member['profile_photo_url'] != null
+                              ? Image.network(
+                                  ApiService.normalizePhotoUrl(
+                                    member['profile_photo_url'],
+                                  )!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const Icon(
+                                        Icons.person,
+                                        color: Color(0xFFEBC14F),
+                                        size: 30,
+                                      ),
+                                )
+                              : const Icon(
+                                  Icons.person,
+                                  color: Color(0xFFEBC14F),
+                                  size: 30,
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              member['name'].toString().toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.verified_user_rounded,
+                                  size: 12,
+                                  color: const Color(
+                                    0xFFEBC14F,
+                                  ).withOpacity(0.7),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${member['years_of_experience']} Years Exp.',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.5),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isActive
+                                  ? Colors.greenAccent.withOpacity(0.1)
+                                  : Colors.white.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              isActive ? 'ACTIVE' : 'OFFLINE',
+                              style: TextStyle(
+                                color: isActive
+                                    ? Colors.greenAccent
+                                    : Colors.white38,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Transform.scale(
+                            scale: 0.8,
+                            child: Switch.adaptive(
+                              value: isActive,
+                              onChanged: (_) => _toggleStatus(member['id']),
+                              activeColor: const Color(0xFFEBC14F),
+                              activeTrackColor: const Color(
+                                0xFFEBC14F,
+                              ).withOpacity(0.3),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         );
       },

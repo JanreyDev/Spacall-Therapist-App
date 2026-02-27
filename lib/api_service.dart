@@ -150,6 +150,56 @@ class _PusherManager {
     return controller.stream;
   }
 
+  /// Subscribe to a public channel.
+  Stream<Map<String, dynamic>> publicChannel(
+    String channelName,
+    String eventName,
+  ) {
+    final fullName = channelName;
+
+    void doSubscribe() {
+      if (_channels.containsKey(fullName) || _client == null) return;
+      debugPrint('[Pusher] 📡 Subscribing public channel: $fullName');
+      final ch = _client!.publicChannel(fullName);
+      _channels[fullName] = ch;
+      ch
+          .bind('pusher:subscription_succeeded')
+          .listen((_) => debugPrint('[Pusher] ✅ Subscribed: $fullName'));
+      ch.subscribe();
+    }
+
+    if (_connected) {
+      doSubscribe();
+    } else {
+      _pendingSubscriptions.add(doSubscribe);
+    }
+
+    final controller = StreamController<Map<String, dynamic>>.broadcast();
+    void tryBind() {
+      if (_channels.containsKey(fullName)) {
+        _channels[fullName]!.bind(eventName).listen((event) {
+          final raw = event.data;
+          if (raw is Map<String, dynamic>) {
+            controller.add(raw);
+          } else if (raw != null) {
+            try {
+              controller.add(
+                Map<String, dynamic>.from(jsonDecode(raw.toString())),
+              );
+            } catch (_) {
+              controller.add({'raw': raw});
+            }
+          }
+        });
+      } else {
+        Future.delayed(const Duration(milliseconds: 200), tryBind);
+      }
+    }
+
+    Future.delayed(const Duration(milliseconds: 50), tryBind);
+    return controller.stream;
+  }
+
   void disconnect() {
     for (final ch in _channels.values) {
       ch.unsubscribe();
@@ -273,6 +323,25 @@ class ApiService {
           debugPrint('[Pusher] Notification: $data');
           onNotificationReceived(data);
         });
+  }
+
+  void listenForStoreStaffUpdates(
+    int storeProfileId,
+    Function(dynamic) onUpdated,
+    Function(int) onDeleted,
+  ) {
+    final channel = 'store.$storeProfileId.staff';
+    _pusher.publicChannel(channel, 'StoreStaffUpdated').listen((data) {
+      debugPrint('[Pusher] StoreStaffUpdated: $data');
+      onUpdated(data['staff'] ?? data);
+    });
+
+    _pusher.publicChannel(channel, 'StoreStaffDeleted').listen((data) {
+      debugPrint('[Pusher] StoreStaffDeleted: $data');
+      if (data['staff_id'] != null) {
+        onDeleted(int.tryParse(data['staff_id'].toString()) ?? 0);
+      }
+    });
   }
 
   void disconnectEcho() {
@@ -1150,6 +1219,20 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getStoreProfile(String token) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/provider/profile'),
+      headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['store_profile'] ?? {};
+    } else {
+      throw Exception('Failed to fetch store profile');
+    }
+  }
+
   Future<List<dynamic>> getStoreStaff(String token) async {
     final response = await http.get(
       Uri.parse('$baseUrl/store/staff'),
@@ -1218,6 +1301,69 @@ class ApiService {
       return jsonDecode(response.body);
     } else {
       throw Exception('Failed to toggle staff status');
+    }
+  }
+
+  Future<Map<String, dynamic>> updateStoreStaff({
+    required String token,
+    required int staffId,
+    String? name,
+    String? bio,
+    int? yearsOfExperience,
+    dynamic photo,
+  }) async {
+    try {
+      var request = http.MultipartRequest(
+        'POST', // Using POST for multipart update
+        Uri.parse('$baseUrl/store/staff/$staffId'),
+      );
+      request.headers['Authorization'] = 'Bearer $token';
+      request.headers['Accept'] = 'application/json';
+
+      if (name != null) request.fields['name'] = name;
+      if (bio != null) request.fields['bio'] = bio;
+      if (yearsOfExperience != null) {
+        request.fields['years_of_experience'] = yearsOfExperience.toString();
+      }
+
+      if (photo != null) {
+        if (photo is XFile) {
+          request.files.add(
+            await http.MultipartFile.fromPath('photo', photo.path),
+          );
+        } else if (photo is String) {
+          request.files.add(await http.MultipartFile.fromPath('photo', photo));
+        }
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to update staff: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Update Staff Error: $e');
+    }
+  }
+
+  Future<void> deleteStoreStaff(String token, int staffId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/store/staff/$staffId'),
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to delete staff: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Delete Staff Error: $e');
     }
   }
 }

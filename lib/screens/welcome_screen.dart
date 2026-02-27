@@ -1593,7 +1593,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
           // Stats SECOND
           _buildStatsSection(goldColor, themeProvider),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
+
+          // Recent Transactions THIRD
+          _buildRecentTransactionsSection(goldColor, themeProvider),
 
           // Ongoing Job - REMOVED per user request
           // if (_ongoingBooking != null) ...[
@@ -2529,7 +2532,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 32),
+      ],
+    );
+  }
+
+  Widget _buildRecentTransactionsSection(
+    Color goldColor,
+    ThemeProvider themeProvider,
+  ) {
+    return Column(
+      children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -2600,7 +2612,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   return _buildTransactionCard(tx, themeProvider, goldColor);
                 },
               ),
-        const SizedBox(height: 100),
       ],
     );
   }

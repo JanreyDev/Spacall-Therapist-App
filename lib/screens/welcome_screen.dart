@@ -31,7 +31,7 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
   final ApiService _apiService = ApiService();
-  bool _isOnline = true;
+  bool _isOnline = false;
   bool _isUpdating = false;
   String _currentAddress = 'Not set';
   int _directRequestCount = 0;
@@ -169,17 +169,21 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     // Auto-online on login
     _toggleOnline(true);
     _pollingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      // Core updates always happen
+      _fetchProfile();
+      _fetchDashboardStats();
+      _fetchTransactions();
+
+      if (timer.tick % 6 == 0) _fetchTiers();
+
+      // Conditional updates based on online status
       if (_isOnline) {
-        _fetchProfile();
-        if (timer.tick % 6 == 0) _fetchTiers(); // Refresh tiers every minute
-        _fetchDashboardStats(); // Periodic fetch
         _checkActiveRequests();
         _checkOngoingJob();
         _checkNearbyBookings();
         if (widget.userData['user']?['customer_tier'] == 'store') {
           _checkStoreRequests();
         }
-        _fetchTransactions();
         _updateLiveLocation();
       }
     });
@@ -221,20 +225,52 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Future<void> _updateLiveLocation() async {
+    final user = widget.userData['user'];
+    final provider = widget.userData['provider'];
+    final isStore = user?['customer_tier'] == 'store';
+
     try {
-      final position = await _determinePosition();
-      setState(() {
-        _currentPosition = position;
-      });
+      double lat = 14.5995;
+      double lng = 120.9842;
+
+      if (isStore && provider?['store_profile'] != null) {
+        // Use Store's fixed coordinates
+        lat =
+            double.tryParse(provider['store_profile']['latitude'].toString()) ??
+            lat;
+        lng =
+            double.tryParse(
+              provider['store_profile']['longitude'].toString(),
+            ) ??
+            lng;
+
+        if (mounted) {
+          setState(() {
+            _currentAddress =
+                provider['store_profile']['store_name'] ?? "Store Location";
+          });
+        }
+      } else {
+        // Use GPS for Classic/VIP
+        final position = await _determinePosition();
+        lat = position.latitude;
+        lng = position.longitude;
+        if (mounted) {
+          setState(() {
+            _currentPosition = position;
+          });
+        }
+        await _getAddressFromLatLng(position);
+      }
+
       await _apiService.updateLocation(
         token: widget.userData['token'],
-        latitude: position.latitude,
-        longitude: position.longitude,
+        latitude: lat,
+        longitude: lng,
         isOnline: _isOnline,
       );
-      await _getAddressFromLatLng(position);
     } catch (e) {
-      print('Periodic location update error: $e');
+      debugPrint('Periodic location update error: $e');
     }
   }
 
@@ -260,7 +296,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
           // _currency = user['currency'] ?? 'PHP';
 
-          // Auto-offline if balance falls below 1000
+          // Synchronize online status with backend provider availability
+          if (provider != null) {
+            _isOnline =
+                provider['is_available'] == true ||
+                provider['is_available'] == 1 ||
+                provider['is_available'] == '1';
+          }
+
+          // Force local status offline if balance is insufficient (Double-check)
           if (_walletBalance < 1000 && _isOnline) {
             _isOnline = false;
             _apiService.updateLocation(
@@ -1168,6 +1212,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   Future<void> _toggleOnline(bool value) async {
+    if (value && _walletBalance < 1000) {
+      _showLuxuryDialog(
+        'Insufficient Wallet Balance. A minimum maintaining balance of ₱1,000.00 is required to activate your online status.',
+        isError: true,
+      );
+      setState(() {
+        _isOnline = false;
+      });
+      return;
+    }
+
     setState(() {
       _isUpdating = true;
     });
@@ -1233,6 +1288,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       );
       setState(() {
         _isUpdating = false;
+        _isOnline = false; // Revert to offline state on failure
       });
     }
   }
@@ -1373,9 +1429,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         children: [
           // 1. Refined Header Layout
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Logout Button (Far Left)
+              // Logout Button & Location (Left Group)
               IconButton(
                 onPressed: _handleLogout,
                 icon: Icon(
@@ -1385,87 +1440,98 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
                 tooltip: 'Logout',
               ),
-              // Status Group (Right)
-              Row(
-                children: [
-                  // Location Indicator
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
+              const SizedBox(width: 4),
+              // Location Indicator
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(20),
+                  // Border removed for unified luxury look
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      user?['customer_tier'] == 'store'
+                          ? Icons.storefront
+                          : Icons.location_on,
+                      color: goldColor,
+                      size: 14,
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white10),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          user?['customer_tier'] == 'store'
-                              ? Icons.storefront
-                              : Icons.location_on,
-                          color: goldColor,
-                          size: 14,
+                    const SizedBox(width: 6),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 120),
+                      child: Text(
+                        user?['customer_tier'] == 'store'
+                            ? (widget.userData['provider']?['store_profile']?['store_name'] ??
+                                  'Store')
+                            : _currentAddress,
+                        style: TextStyle(
+                          color: textColor.withOpacity(0.7),
+                          fontSize: 12,
+                          fontWeight: user?['customer_tier'] == 'store'
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                         ),
-                        const SizedBox(width: 6),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 100),
-                          child: Text(
-                            _currentAddress,
-                            style: TextStyle(
-                              color: textColor.withOpacity(0.7),
-                              fontSize: 12,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Online Toggle
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white10),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              // Online Toggle (Right)
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  // Border removed per user request
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: _isOnline ? Colors.green : Colors.grey,
+                        shape: BoxShape.circle,
+                        boxShadow: _isOnline
+                            ? [
+                                BoxShadow(
+                                  color: Colors.green.withOpacity(0.5),
+                                  blurRadius: 4,
+                                  spreadRadius: 1,
+                                ),
+                              ]
+                            : null,
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          decoration: BoxDecoration(
-                            color: _isOnline ? Colors.green : Colors.grey,
-                            shape: BoxShape.circle,
-                            boxShadow: _isOnline
-                                ? [
-                                    BoxShadow(
-                                      color: Colors.green.withOpacity(0.5),
-                                      blurRadius: 4,
-                                      spreadRadius: 1,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                        ),
-                        Transform.scale(
-                          scale: 0.7,
-                          child: Switch.adaptive(
-                            value: _isOnline,
-                            onChanged: _isUpdating ? null : _toggleOnline,
-                            activeColor: goldColor,
-                            activeTrackColor: goldColor.withOpacity(0.3),
-                          ),
-                        ),
-                      ],
+                    Transform.scale(
+                      scale: 0.7,
+                      child: Switch.adaptive(
+                        value: _isOnline,
+                        onChanged: (_isUpdating || _walletBalance < 1000)
+                            ? (val) {
+                                if (_walletBalance < 1000) {
+                                  _showLuxuryDialog(
+                                    'Insufficient Wallet Balance. A minimum maintaining balance of ₱1,000.00 is required to activate your online status.',
+                                    isError: true,
+                                  );
+                                }
+                              }
+                            : _toggleOnline,
+                        activeColor: goldColor,
+                        activeTrackColor: goldColor.withOpacity(0.3),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -1736,17 +1802,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         // Close deposit dialog before launching URL
         Navigator.of(context).pop();
 
-        if (await canLaunchUrl(uri)) {
+        try {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
-
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please complete the payment in your browser.'),
-              backgroundColor: Color(0xFFEBC14F),
-            ),
-          );
-        } else {
+        } catch (e) {
           throw Exception('Could not launch payment URL');
         }
       } else {
@@ -2176,216 +2234,399 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   void _showWithdrawDialog() {
     final amountController = TextEditingController();
     final accountController = TextEditingController();
+    final accountNameController = TextEditingController();
     String selectedMethod = 'GCash';
-    const goldColor = Color(0xFFD4AF37);
-    final paymentMethods = ['GCash', 'Bank Transfer'];
+    const goldColor = Color(0xFFEBC14F);
+    final paymentMethods = ['GCash', 'Maya', 'Bank Transfer', 'Paymongo'];
+    final quickAmounts = [500.0, 1000.0, 2000.0, 5000.0];
 
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: const Color(0xFF0A0A0A),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: goldColor.withOpacity(0.5)),
+          borderRadius: BorderRadius.circular(32),
+          side: BorderSide(color: goldColor.withOpacity(0.1), width: 1),
         ),
         child: StatefulBuilder(
-          builder: (context, setState) => SingleChildScrollView(
+          builder: (context, setDialogState) => SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.all(20.0),
+              padding: const EdgeInsets.all(28.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'WITHDRAW FUNDS',
-                        style: TextStyle(
-                          color: goldColor,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.0,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Withdraw Funds',
+                            style: TextStyle(
+                              color: goldColor,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          Text(
+                            'Request payout from your wallet',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.4),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white54),
-                        onPressed: () => Navigator.of(context).pop(),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.05),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.05),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.close_rounded,
+                            color: Colors.white.withOpacity(0.5),
+                            size: 20,
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Amount',
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
-                  const SizedBox(height: 4),
-                  SizedBox(
-                    height: 48,
-                    child: TextField(
-                      controller: amountController,
-                      keyboardType: TextInputType.number,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                      decoration: InputDecoration(
-                        prefixText: '$_currency ',
-                        prefixStyle: const TextStyle(color: goldColor),
-                        filled: true,
-                        fillColor: Colors.black.withOpacity(0.3),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
+                  const SizedBox(height: 32),
+
+                  // Wallet Info
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: goldColor.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: goldColor.withOpacity(0.1)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.account_balance_wallet_rounded,
+                          color: goldColor,
+                          size: 20,
                         ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: goldColor.withOpacity(0.3),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'AVAILABLE BALANCE',
+                              style: TextStyle(
+                                color: goldColor.withOpacity(0.6),
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                            Text(
+                              '$_currency${NumberFormat('#,##0.00').format(_walletBalance)}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Amount Section
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.02),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withOpacity(0.05)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'AMOUNT TO WITHDRAW',
+                          style: TextStyle(
+                            color: goldColor.withOpacity(0.5),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
                           ),
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: goldColor),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: amountController,
+                          keyboardType: TextInputType.number,
+                          onChanged: (_) => setDialogState(() {}),
+                          style: const TextStyle(
+                            color: goldColor,
+                            fontSize: 40,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -1,
+                          ),
+                          decoration: InputDecoration(
+                            prefixText: '$_currency ',
+                            prefixStyle: const TextStyle(
+                              color: goldColor,
+                              fontSize: 40,
+                              fontWeight: FontWeight.w900,
+                            ),
+                            border: InputBorder.none,
+                            hintText: '0.00',
+                            hintStyle: TextStyle(
+                              color: Colors.white.withOpacity(0.05),
+                              fontSize: 40,
+                              fontWeight: FontWeight.w900,
+                            ),
+                            contentPadding: EdgeInsets.zero,
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Withdraw via',
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: goldColor.withOpacity(0.3)),
+
+                  // Quick Amounts
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: quickAmounts.map((amt) {
+                        final isSelected =
+                            amountController.text == amt.toInt().toString();
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: GestureDetector(
+                            onTap: () => setDialogState(
+                              () => amountController.text = amt
+                                  .toInt()
+                                  .toString(),
+                            ),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? goldColor
+                                    : Colors.white.withOpacity(0.03),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? Colors.transparent
+                                      : Colors.white.withOpacity(0.05),
+                                ),
+                              ),
+                              child: Text(
+                                '$_currency${NumberFormat('#,###').format(amt)}',
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? Colors.black
+                                      : Colors.white70,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Method Selection
+                  Text(
+                    'PAYOUT METHOD',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.3),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.03),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.05)),
+                    ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: selectedMethod,
-                        dropdownColor: const Color(0xFF1E1E1E),
+                        dropdownColor: const Color(0xFF1A1A1A),
                         icon: const Icon(
-                          Icons.arrow_drop_down,
+                          Icons.keyboard_arrow_down,
                           color: goldColor,
                         ),
                         isExpanded: true,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            selectedMethod = newValue!;
-                          });
-                        },
-                        items: paymentMethods.map<DropdownMenuItem<String>>((
-                          String value,
-                        ) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
+                        underline: Container(),
+                        items: paymentMethods.map((m) {
+                          return DropdownMenuItem(
+                            value: m,
+                            child: Text(
+                              m,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           );
                         }).toList(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    selectedMethod == 'GCash'
-                        ? 'GCash Number'
-                        : 'Account Number',
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
-                  const SizedBox(height: 4),
-                  SizedBox(
-                    height: 48,
-                    child: TextField(
-                      controller: accountController,
-                      keyboardType: TextInputType.number,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.black.withOpacity(0.3),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: goldColor.withOpacity(0.3),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: goldColor),
-                        ),
+                        onChanged: (val) =>
+                            setDialogState(() => selectedMethod = val!),
                       ),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 45,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        final amount =
-                            double.tryParse(amountController.text) ?? 0.0;
-                        final account = accountController.text;
 
-                        if (amount <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please enter a valid amount'),
-                            ),
-                          );
-                          return;
-                        }
-
-                        if (amount > _walletBalance) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Insufficient balance'),
-                            ),
-                          );
-                          return;
-                        }
-
-                        if (account.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please enter account details'),
-                            ),
-                          );
-                          return;
-                        }
-
-                        Navigator.of(context).pop(); // Close dialog
-                        _handleWithdraw(amount, selectedMethod, account);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: goldColor,
-                        foregroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                  // Account Details Section
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.02),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withOpacity(0.05)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'ACCOUNT DETAILS',
+                          style: TextStyle(
+                            color: goldColor.withOpacity(0.5),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
+                          ),
                         ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: accountNameController,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            labelText: 'Account Name',
+                            labelStyle: TextStyle(
+                              color: Colors.white.withOpacity(0.3),
+                            ),
+                            enabledBorder: UnderlineInputBorder(
+                              borderSide: BorderSide(
+                                color: Colors.white.withOpacity(0.1),
+                              ),
+                            ),
+                            focusedBorder: const UnderlineInputBorder(
+                              borderSide: BorderSide(color: goldColor),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: accountController,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: InputDecoration(
+                            labelText: selectedMethod == 'Bank Transfer'
+                                ? 'Account Number'
+                                : 'Mobile Number',
+                            labelStyle: TextStyle(
+                              color: Colors.white.withOpacity(0.3),
+                            ),
+                            enabledBorder: UnderlineInputBorder(
+                              borderSide: BorderSide(
+                                color: Colors.white.withOpacity(0.1),
+                              ),
+                            ),
+                            focusedBorder: const UnderlineInputBorder(
+                              borderSide: BorderSide(color: goldColor),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 8,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Final Action Button
+                  GestureDetector(
+                    onTap: () {
+                      final amount =
+                          double.tryParse(amountController.text) ?? 0.0;
+                      final accName = accountNameController.text.trim();
+                      final accNum = accountController.text.trim();
+
+                      if (amount <= 0) {
+                        _showError('Please enter a valid amount');
+                        return;
+                      }
+
+                      if (amount > _walletBalance) {
+                        _showError('Insufficient balance');
+                        return;
+                      }
+
+                      if (accName.isEmpty || accNum.isEmpty) {
+                        _showError('Please complete account details');
+                        return;
+                      }
+
+                      Navigator.of(context).pop();
+                      _handleWithdraw(
+                        amount,
+                        selectedMethod,
+                        'Name: $accName\nAccount: $accNum',
+                      );
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [goldColor, Color(0xFFC5A03F)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: goldColor.withOpacity(0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
                       ),
-                      child: const Text(
-                        'WITHDRAW',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                      child: const Center(
+                        child: Text(
+                          'REQUEST WITHDRAWAL',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
+                          ),
                         ),
                       ),
                     ),
@@ -2396,6 +2637,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
     );
   }
 

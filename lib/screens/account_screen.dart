@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:pinput/pinput.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../widgets/safe_network_image.dart';
 import '../api_service.dart';
@@ -9,7 +10,9 @@ import 'login_screen.dart';
 import 'support_chat_screen.dart';
 import 'edit_profile_screen.dart';
 import 'vip_upgrade_screen.dart';
+import 'store_profile_screen.dart';
 import '../widgets/luxury_error_modal.dart';
+import '../widgets/luxury_success_modal.dart';
 
 class AccountScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -109,39 +112,49 @@ class _AccountScreenState extends State<AccountScreen> {
                 defaultPinTheme: defaultPinTheme,
                 obscureText: true,
                 onCompleted: (pin) async {
-                  // Verify PIN and delete
-                  // Note using 'pin' field from user data for verification
-                  if (pin == widget.userData['user']?['pin']) {
-                    setDialogState(() => _isProcessing = true);
-                    try {
-                      await _apiService.deleteAccount(widget.userData['token']);
-                      if (!mounted) return;
-                      Navigator.pop(context); // Close dialog
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const LoginScreen(),
-                        ),
-                        (route) => false,
-                      );
-                    } catch (e) {
-                      setDialogState(() => _isProcessing = false);
-                      showDialog(
-                        context: context,
-                        builder: (context) => LuxuryErrorModal(
-                          title: "ERROR",
-                          message: e.toString().replaceAll('Exception: ', ''),
-                          onConfirm: () => Navigator.pop(context),
-                        ),
-                      );
-                    }
-                  } else {
+                  setDialogState(() => _isProcessing = true);
+                  try {
+                    await _apiService.deleteAccount(
+                      widget.userData['token'],
+                      pin,
+                    );
+                    if (!mounted) return;
+                    Navigator.pop(context); // Close the PIN dialog
+
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) => LuxurySuccessModal(
+                        title: "ACCOUNT DELETED",
+                        message:
+                            "Your therapist account has been permanently deleted. We're sorry to see you go!",
+                        buttonText: "CONTINUE",
+                        onConfirm: () async {
+                          // Clear saved phone number
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.remove('last_mobile_number');
+
+                          // Close the success dialog
+                          if (!context.mounted) return;
+                          Navigator.pop(context);
+                          // Return to the login screen (Sending OTP screen)
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const LoginScreen(),
+                            ),
+                            (route) => false,
+                          );
+                        },
+                      ),
+                    );
+                  } catch (e) {
+                    setDialogState(() => _isProcessing = false);
                     showDialog(
                       context: context,
                       builder: (context) => LuxuryErrorModal(
                         title: "VERIFICATION FAILED",
-                        message:
-                            "The security PIN you entered is incorrect. Please double-check and try again.",
+                        message: e.toString().replaceAll('Exception: ', ''),
                         onConfirm: () => Navigator.pop(context),
                       ),
                     );
@@ -319,12 +332,16 @@ class _AccountScreenState extends State<AccountScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          displayName,
-                          style: TextStyle(
-                            color: themeProvider.textColor,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
+                        Flexible(
+                          child: Text(
+                            displayName,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: themeProvider.textColor,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -576,7 +593,31 @@ class _AccountScreenState extends State<AccountScreen> {
                 ),
 
               // VIP Status & Progress Section
+              const SizedBox(height: 24),
               _buildVipProgressSection(provider, themeProvider),
+
+              // Store Management Section (Only for Store Tier)
+              if (tier == 'store')
+                _buildSection("Business Management", [
+                  _buildSettingItem(
+                    Icons.storefront,
+                    "Store Profile",
+                    "Update address and physical location",
+                    themeProvider,
+                    onTap: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              StoreProfileScreen(userData: widget.userData),
+                        ),
+                      );
+                      if (result == true) {
+                        setState(() {});
+                      }
+                    },
+                  ),
+                ], themeProvider),
 
               const SizedBox(height: 40),
 
@@ -878,45 +919,51 @@ class _AccountScreenState extends State<AccountScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "VIP STATUS",
-                      style: TextStyle(
-                        color: goldColor.withOpacity(0.5),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.5,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "VIP STATUS",
+                        style: TextStyle(
+                          color: goldColor.withOpacity(0.5),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      currentTier?['name'] ?? "Standard Account",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                      const SizedBox(height: 4),
+                      Text(
+                        currentTier?['name'] ?? "Standard Account",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                if (nextTier != null) const SizedBox(width: 8),
                 if (nextTier != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: goldColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      "PROGRESS TO ${nextTier['name'].toUpperCase()}",
-                      style: TextStyle(
-                        color: goldColor,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: goldColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        "PROGRESS TO ${nextTier['name'].toUpperCase()}",
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: goldColor,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),

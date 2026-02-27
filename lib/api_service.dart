@@ -356,7 +356,10 @@ class ApiService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: jsonEncode({'mobile_number': mobileNumber}),
+        body: jsonEncode({
+          'mobile_number': mobileNumber,
+          'app_type': 'therapist',
+        }),
       );
 
       if (response.statusCode == 200) {
@@ -380,7 +383,11 @@ class ApiService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: jsonEncode({'mobile_number': mobileNumber, 'otp': otp}),
+        body: jsonEncode({
+          'mobile_number': mobileNumber,
+          'otp': otp,
+          'app_type': 'therapist',
+        }),
       );
 
       if (response.statusCode == 200) {
@@ -429,6 +436,7 @@ class ApiService {
       request.fields['date_of_birth'] = dob;
       request.fields['pin'] = pin;
       request.fields['role'] = role;
+      request.fields['app_type'] = 'therapist';
 
       if (customerTier != null) {
         request.fields['customer_tier'] = customerTier;
@@ -572,6 +580,50 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> updateStoreProfile({
+    required String token,
+    required String storeName,
+    required String address,
+    required double latitude,
+    required double longitude,
+    String? description,
+    String? city,
+    String? province,
+  }) async {
+    try {
+      final url = '$baseUrl/therapist/store-profile';
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'store_name': storeName,
+          'address': address,
+          'latitude': latitude,
+          'longitude': longitude,
+          if (description != null) 'description': description,
+          if (city != null) 'city': city,
+          if (province != null) 'province': province,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        String msg = 'Failed to update store profile';
+        try {
+          final err = jsonDecode(response.body);
+          msg = err['message'] ?? msg;
+        } catch (_) {}
+        throw Exception(msg);
+      }
+    } catch (e) {
+      throw Exception('Store Profile Update Error: $e');
+    }
+  }
+
   Future<Map<String, dynamic>> deposit({
     required String token,
     required double amount,
@@ -581,9 +633,14 @@ class ApiService {
       Uri.parse('$baseUrl/wallet/deposit'),
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: jsonEncode({'amount': amount, 'method': method}),
+      body: jsonEncode({
+        'amount': amount,
+        'method': method,
+        'app': 'therapist',
+      }),
     );
 
     if (response.statusCode == 200) {
@@ -650,6 +707,9 @@ class ApiService {
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
+      } else if (response.statusCode == 422 &&
+          response.body.contains('Insufficient Wallet Balance')) {
+        return {'bookings': []};
       } else {
         throw Exception('Failed to fetch nearby bookings: ${response.body}');
       }
@@ -737,6 +797,9 @@ class ApiService {
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
+      } else if (response.statusCode == 422 &&
+          response.body.contains('Insufficient Wallet Balance')) {
+        return {'requests': []};
       } else {
         throw Exception('Failed to fetch active requests: ${response.body}');
       }
@@ -802,7 +865,11 @@ class ApiService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: jsonEncode({'mobile_number': mobileNumber, 'pin': pin}),
+        body: jsonEncode({
+          'mobile_number': mobileNumber,
+          'pin': pin,
+          'app_type': 'therapist',
+        }),
       );
 
       if (response.statusCode == 200) {
@@ -859,22 +926,24 @@ class ApiService {
     }
   }
 
-  Future<void> deleteAccount(String token) async {
+  Future<void> deleteAccount(String token, String pin) async {
     try {
       final response = await http.delete(
-        Uri.parse('$baseUrl/auth/account'),
+        Uri.parse('$baseUrl/auth/delete-account'),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
         },
+        body: jsonEncode({'pin': pin}),
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to delete account: ${response.body}');
+        final error = jsonDecode(response.body);
+        throw Exception(error['message'] ?? 'Failed to delete account');
       }
     } catch (e) {
-      throw Exception('Delete Account Error: $e');
+      throw Exception('$e');
     }
   }
 
@@ -1221,13 +1290,13 @@ class ApiService {
 
   Future<Map<String, dynamic>> getStoreProfile(String token) async {
     final response = await http.get(
-      Uri.parse('$baseUrl/provider/profile'),
+      Uri.parse('$baseUrl/therapist/profile'),
       headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'},
     );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return data['store_profile'] ?? {};
+      return data['provider']?['store_profile'] ?? {};
     } else {
       throw Exception('Failed to fetch store profile');
     }

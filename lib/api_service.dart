@@ -608,7 +608,10 @@ class ApiService {
       if (city != null) request.fields['city'] = city;
       if (province != null) request.fields['province'] = province;
 
+      debugPrint('[API] Multipart Fields: ${request.fields}');
+
       if (photoPath != null) {
+        debugPrint('[API] Attaching photo: $photoPath');
         request.files.add(
           await http.MultipartFile.fromPath('photo', photoPath),
         );
@@ -620,6 +623,8 @@ class ApiService {
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {
+        debugPrint('STORE_UPDATE_FAILED: ${response.statusCode}');
+        debugPrint('BODY: ${response.body}');
         String msg = 'Failed to update store profile';
         try {
           final err = jsonDecode(response.body);

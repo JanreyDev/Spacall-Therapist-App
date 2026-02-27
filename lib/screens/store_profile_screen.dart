@@ -182,7 +182,7 @@ class _StoreProfileScreenState extends State<StoreProfileScreen> {
           context: context,
           builder: (context) => LuxuryErrorModal(
             title: 'UPDATE FAILED',
-            message: e.toString().replaceAll("Exception:", "").trim(),
+            message: e.toString(),
             onConfirm: () => Navigator.pop(context),
           ),
         );

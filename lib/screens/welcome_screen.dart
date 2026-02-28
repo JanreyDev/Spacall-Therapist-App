@@ -47,6 +47,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   int? _lastDirectBookingId;
   final Set<int> _notifiedBookingIds = {};
+  int? _activeBookingDialogId; // Track the currently open booking notification
   double _walletBalance = 0.00;
   String _verificationStatus = 'pending'; // pending, verified, rejected
   String _currency = '₱';
@@ -68,6 +69,17 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   void initState() {
     super.initState();
     print("WelcomeScreen initialized - Dynamic Dashboard");
+
+    // Initialize balance from userData if available to prevent 0.00 flash
+    final user = widget.userData['user'];
+    if (user != null && user['wallet_balance'] != null) {
+      final rawBalance = user['wallet_balance'].toString().replaceAll(
+        RegExp(r'[^0-9.]'),
+        '',
+      );
+      _walletBalance = double.tryParse(rawBalance) ?? 0.00;
+    }
+
     _startPolling();
     // Initialize WebSocket immediately — do NOT wait for GPS/toggleOnline
     _initRealtimeListeners();
@@ -177,10 +189,17 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 _fetchDashboardStats();
                 _fetchTransactions();
 
-                // Show a success modal if applicable
+                // IMMEDIATELY update the local state for online toggle synchronization
+                final raw = event['newBalance']?.toString() ?? '';
                 final balance = double.tryParse(
-                  event['newBalance']?.toString() ?? '',
+                  raw.replaceAll(RegExp(r'[^0-9.]'), ''),
                 );
+
+                if (mounted && balance != null) {
+                  setState(() {
+                    _walletBalance = balance;
+                  });
+                }
 
                 showDialog(
                   context: context,
@@ -200,6 +219,25 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               debugPrint(
                 '[WelcomeScreen] ⚡ REAL-TIME Booking Claimed: $claimed',
               );
+
+              final claimedBookingId = claimed['booking_id'];
+              if (claimedBookingId != null &&
+                  claimedBookingId == _activeBookingDialogId) {
+                // If the dialog for this booking is open, close it
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "This booking was already claimed by another therapist.",
+                      ),
+                      backgroundColor: Colors.orange,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
+
               // Refresh counts immediately to remove the claimed booking
               _checkActiveRequests();
               _checkNearbyBookings();
@@ -226,9 +264,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     super.dispose();
   }
 
-  void _startPolling() {
+  Future<void> _startPolling() async {
     _fetchTiers(); // Fetch tiers once or periodically
-    _fetchProfile();
+    await _fetchProfile(); // INITIAL FETCH MUST BE AWAITED for accurate balance check
     _checkActiveRequests();
     _checkOngoingJob();
     _checkNearbyBookings();
@@ -237,6 +275,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       _checkStoreRequests();
     }
     _fetchTransactions();
+
     // Auto-online on login
     _toggleOnline(true);
     _pollingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
@@ -357,9 +396,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           widget.userData['user'] = user;
           widget.userData['provider'] = provider;
 
-          // Adjust parsing based on actual API response structure
-          _walletBalance =
-              double.tryParse(user['wallet_balance'].toString()) ?? 0.00;
+          // Adjust parsing based on actual API response structure (use regex to strip currency symbols/commas)
+          final rawBalance = user['wallet_balance'].toString().replaceAll(
+            RegExp(r'[^0-9.]'),
+            '',
+          );
+          _walletBalance = double.tryParse(rawBalance) ?? 0.00;
           // Map is_verified (bool) to status string
           bool isVerified =
               user['is_verified'] == true || user['is_verified'] == 1;
@@ -665,6 +707,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     final bookingId = booking['id'];
     if (bookingId != null) {
       _notifiedBookingIds.add(bookingId);
+      _activeBookingDialogId = bookingId;
     }
 
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
@@ -968,7 +1011,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           ],
         ),
       ),
-    );
+    ).then((_) {
+      if (_activeBookingDialogId == bookingId) {
+        _activeBookingDialogId = null;
+      }
+    });
   }
 
   Future<void> _acceptBooking(int bookingId) async {
@@ -1083,10 +1130,19 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       );
     }
 
-    return await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-      timeLimit: const Duration(seconds: 5),
-    );
+    try {
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
+      );
+    } catch (e) {
+      // Fallback to last known position on timeout or error
+      Position? lastKnown = await Geolocator.getLastKnownPosition();
+      if (lastKnown != null) {
+        return lastKnown;
+      }
+      rethrow;
+    }
   }
 
   void _showBookingDetails(Map<String, dynamic> booking) {
@@ -1663,12 +1719,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       height: 8,
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       decoration: BoxDecoration(
-                        color: _isOnline ? Colors.green : Colors.grey,
+                        color: _isOnline ? goldColor : Colors.grey,
                         shape: BoxShape.circle,
                         boxShadow: _isOnline
                             ? [
                                 BoxShadow(
-                                  color: Colors.green.withOpacity(0.5),
+                                  color: goldColor.withOpacity(0.5),
                                   blurRadius: 4,
                                   spreadRadius: 1,
                                 ),

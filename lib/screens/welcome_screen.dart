@@ -275,8 +275,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     }
     _fetchTransactions();
 
+    // Immediately fetch location on app launch (shows prompt and populates address)
+    _updateLiveLocation();
+
     // Auto-online on login
-    _toggleOnline(true);
+    if (_walletBalance >= 1000) {
+      _toggleOnline(true);
+    }
     _pollingTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       // Core updates always happen
       _fetchProfile();
@@ -1446,10 +1451,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   Future<void> _toggleOnline(bool value) async {
     if (value && _walletBalance < 1000) {
-      _showLuxuryDialog(
-        'Insufficient Wallet Balance. A minimum maintaining balance of ₱1,000.00 is required to activate your online status.',
-        isError: true,
-      );
+      _showBalanceRequirementDialog();
       setState(() {
         _isOnline = false;
       });
@@ -1731,16 +1733,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       scale: 0.7,
                       child: Switch.adaptive(
                         value: _isOnline,
-                        onChanged: (_walletBalance < 1000)
-                            ? (val) {
-                                if (_walletBalance < 1000) {
-                                  _showLuxuryDialog(
-                                    'Insufficient Wallet Balance. A minimum maintaining balance of ₱1,000.00 is required to activate your online status.',
-                                    isError: true,
-                                  );
-                                }
-                              }
-                            : _toggleOnline,
+                        onChanged: _toggleOnline,
                         activeColor: goldColor,
                         activeTrackColor: goldColor.withOpacity(0.3),
                       ),

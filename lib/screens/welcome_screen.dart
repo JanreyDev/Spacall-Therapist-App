@@ -33,7 +33,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     with WidgetsBindingObserver {
   final ApiService _apiService = ApiService();
   bool _isOnline = false;
-  bool _isUpdating = false;
   String _currentAddress = 'Not set';
   int _directRequestCount = 0;
   int _nearbyRequestCount = 0;
@@ -1457,8 +1456,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       return;
     }
 
+    final previousState = _isOnline;
     setState(() {
-      _isUpdating = true;
+      _isOnline = value;
     });
 
     try {
@@ -1500,10 +1500,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         longitude: longitude,
         isOnline: value,
       );
-      setState(() {
-        _isOnline = value;
-        _isUpdating = false;
-      });
 
       if (value) {
         // WebSocket is already initialized in initState/_initRealtimeListeners.
@@ -1521,8 +1517,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         isError: true,
       );
       setState(() {
-        _isUpdating = false;
-        _isOnline = false; // Revert to offline state on failure
+        _isOnline = previousState; // Revert to offline state on failure
       });
     }
   }
@@ -1736,7 +1731,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       scale: 0.7,
                       child: Switch.adaptive(
                         value: _isOnline,
-                        onChanged: (_isUpdating || _walletBalance < 1000)
+                        onChanged: (_walletBalance < 1000)
                             ? (val) {
                                 if (_walletBalance < 1000) {
                                   _showLuxuryDialog(

@@ -61,6 +61,8 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   bool _isNavMode = false;
   double _bearing = 0.0;
   StreamSubscription<Position>? _positionStream;
+  bool _isVerifyingCode = false;
+  final TextEditingController _codeController = TextEditingController();
 
   Future<void> _loadClientMarkerIcon() async {
     // Load client photo (with blue border)
@@ -619,8 +621,11 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         _startNavMode();
       } else if (status == 'arrived') {
         _stopNavMode();
-        _mapController =
-            null; // Important: Clear it when we transition out of map view
+        _showArrivedModal();
+      } else if (status == 'completed') {
+        _showVerificationCodeModal();
+      } else if (status == 'cancelled') {
+        if (mounted) Navigator.pop(context, 'switch_to_sessions');
       }
 
       // Force immediate location update for accurate ETA
@@ -630,6 +635,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         _currentStatus = status;
         _isLoading = false;
       });
+
       // Start countdown when service begins
       if (status == 'in_progress') {
         final rawBooking = widget.booking['duration_minutes'];
@@ -644,25 +650,296 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
           startedAt: DateTime.now().toIso8601String(),
         );
       }
-      if (status == 'completed' || status == 'cancelled') {
-        if (mounted) Navigator.pop(context, 'switch_to_sessions');
-      }
-
-      if (status == 'arrived') {
-        if (mounted) _showArrivedModal();
-      }
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      showDialog(
-        context: context,
-        builder: (context) => LuxuryErrorModal(
-          title: 'ERROR',
-          message: e.toString().replaceAll('Exception: ', ''),
-          onConfirm: () => Navigator.of(context).pop(),
-        ),
-      );
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => LuxuryErrorModal(
+            title: 'ERROR',
+            message: e.toString().replaceAll('Exception: ', ''),
+            onConfirm: () => Navigator.of(context).pop(),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showVerificationCodeModal() {
+    _codeController.clear();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Dialog(
+            backgroundColor: const Color(0xFF1A1A1A),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+              side: BorderSide(color: goldColor.withOpacity(0.3), width: 1),
+            ),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: goldColor.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.security_rounded,
+                        color: goldColor,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'SECURITY VERIFICATION',
+                      style: TextStyle(
+                        color: goldColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2.0,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Enter the 6-digit code from the client to release your payment.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: _codeController,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      maxLength: 6,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+                        fontWeight: FontWeight.w300,
+                        letterSpacing: 12,
+                        fontFamily: 'monospace',
+                      ),
+                      decoration: InputDecoration(
+                        counterText: '',
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.05),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        hintText: '000000',
+                        hintStyle: TextStyle(
+                          color: Colors.white.withOpacity(0.1),
+                        ),
+                      ),
+                      onChanged: (val) {
+                        if (val.length == 6) {
+                          // Keep manual submit for better UX control
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFFB8860B),
+                              goldColor,
+                              Color(0xFFFFD700),
+                            ],
+                          ),
+                        ),
+                        child: ElevatedButton(
+                          onPressed: _isVerifyingCode
+                              ? null
+                              : () async {
+                                  if (_codeController.text.length != 6) return;
+
+                                  setModalState(() => _isVerifyingCode = true);
+                                  try {
+                                    await _apiService.verifyCompletion(
+                                      token: widget.token,
+                                      bookingId: widget.booking['id'],
+                                      verificationCode: _codeController.text,
+                                    );
+                                    if (mounted) {
+                                      Navigator.pop(context); // Close modal
+                                      setState(() {
+                                        _currentStatus = 'completed';
+                                      });
+                                      _showSuccessModal();
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(e.toString()),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  } finally {
+                                    if (mounted) {
+                                      setModalState(
+                                        () => _isVerifyingCode = false,
+                                      );
+                                    }
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.transparent,
+                            shadowColor: Colors.transparent,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: _isVerifyingCode
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.black,
+                                  ),
+                                )
+                              : const Text(
+                                  'VERIFY & FINALIZE',
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.1,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        'BACK',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.5),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showSuccessModal() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Force them to click GOT IT
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28),
+          side: BorderSide(color: goldColor.withOpacity(0.3), width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: goldColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  color: goldColor,
+                  size: 64,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'VERIFICATION SUCCESS',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: goldColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.0,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'The session has been finalized and payment has been released to your wallet.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 15,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 58,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFB8860B), goldColor, Color(0xFFFFD700)],
+                    ),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context); // Close success modal
+                      Navigator.pop(
+                        context,
+                        'switch_to_sessions',
+                      ); // Go back to sessions
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    child: const Text(
+                      'GOT IT',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _scheduleRouteFetch() {
@@ -1331,6 +1608,80 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
             const SizedBox(height: 32),
           ],
 
+          // Payment Verification Status (if completed)
+          if (_currentStatus == 'completed') ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: goldColor.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: goldColor.withOpacity(0.1)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.verified_user_rounded,
+                        color: goldColor,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'SESSION FINALIZED',
+                              style: TextStyle(
+                                color: goldColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            Text(
+                              'Payment has been released to your wallet.',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.5),
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: _showVerificationCodeModal,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text(
+                        'RE-ENTER CODE IF NEEDED',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: goldColor,
+                        side: BorderSide(color: goldColor.withOpacity(0.5)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+          ],
+
           // Service Details Header
           Padding(
             padding: EdgeInsets.zero,
@@ -1472,21 +1823,32 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
 
           const SizedBox(height: 40),
 
-          // Back Button
-          Center(
-            child: TextButton(
+          // Back Button - Enhanced
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
               onPressed: () => Navigator.pop(context, 'switch_to_sessions'),
-              child: Text(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white.withOpacity(0.05),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: Colors.white.withOpacity(0.1)),
+                ),
+                elevation: 0,
+              ),
+              child: const Text(
                 'BACK TO SESSIONS',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                  fontSize: 14,
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 48),
         ],
       ),
     );

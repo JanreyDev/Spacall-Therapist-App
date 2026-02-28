@@ -1448,4 +1448,31 @@ class ApiService {
       throw Exception('Delete Staff Error: $e');
     }
   }
+
+  Future<Map<String, dynamic>> verifyCompletion({
+    required String token,
+    required int bookingId,
+    required String verificationCode,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/bookings/$bookingId/verify-completion'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'verification_code': verificationCode}),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['message'] ?? 'Verification failed');
+      }
+    } catch (e) {
+      throw Exception(e.toString().replaceAll('Exception: ', ''));
+    }
+  }
 }

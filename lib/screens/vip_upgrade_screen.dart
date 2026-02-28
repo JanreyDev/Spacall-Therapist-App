@@ -20,14 +20,13 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
   final ImagePicker _picker = ImagePicker();
 
   int _currentStep = 0;
-  final int _totalSteps = 4;
+  final int _totalSteps = 3;
   bool _isLoading = false;
 
   // Form Controllers
   final TextEditingController _nicknameController = TextEditingController();
   final TextEditingController _ageController = TextEditingController();
   final TextEditingController _expController = TextEditingController();
-  final TextEditingController _skillsController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
 
   // Gallery
@@ -90,7 +89,7 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
         age: int.tryParse(_ageController.text) ?? 18,
         address: null, // Removed from UI as requested
         experience: int.tryParse(_expController.text) ?? 0,
-        skills: _skillsController.text,
+        skills: 'General', // Default value since it was removed
         bio: _bioController.text,
       );
 
@@ -222,9 +221,8 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
               physics: const NeverScrollableScrollPhysics(),
               children: [
                 _buildStep1(themeProvider), // Nickname & Age
-                _buildStep2(themeProvider), // Experience & Specialization
-                _buildStep3(themeProvider), // About
-                _buildStep4(themeProvider), // Photos
+                _buildStep2(themeProvider), // Experience & Bio
+                _buildStep3(themeProvider), // Photos
               ],
             ),
           ),
@@ -312,23 +310,26 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
         children: [
           _buildSectionHeader(
             "Professional Background",
-            "Tell us about your experience and specialized skills.",
+            "Tell us about your experience and providing a brief bio.",
           ),
           const SizedBox(height: 32),
           _buildFormField(
             "Years of Experience",
             _expController,
             Icons.history,
-            "Enter number...",
+            "Enter number of years...",
             keyboardType: TextInputType.number,
           ),
           const SizedBox(height: 24),
           _buildFormField(
-            "Specialization",
-            _skillsController,
-            Icons.star_outline,
-            "e.g., Deep Tissue, Swedish, Sports...",
+            "About Me (Bio)",
+            _bioController,
+            Icons.description_outlined,
+            "Description of yourself and your service...",
+            maxLines: 4,
           ),
+          const SizedBox(height: 32),
+          _buildReviewCard(),
         ],
       ),
     );
@@ -341,32 +342,7 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildSectionHeader(
-            "About",
-            "Provide a professional bio that will be visible to VIP clients.",
-          ),
-          const SizedBox(height: 32),
-          _buildFormField(
-            "About Me",
-            _bioController,
-            Icons.description_outlined,
-            "Description of yourself and your service...",
-            maxLines: 6,
-          ),
-          const SizedBox(height: 32),
-          _buildReviewCard(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStep4(ThemeProvider themeProvider) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionHeader(
-            "Portfolio Gallery",
+            "VIP Portfolio Gallery",
             "Please upload exactly 3 clear professional photos of yourself.",
           ),
           const SizedBox(height: 32),
@@ -564,32 +540,28 @@ class _VipUpgradeScreenState extends State<VipUpgradeScreen> {
       }
     }
 
-    // Step 1: Experience and Specialization
+    // Step 1: Experience & Bio
     if (_currentStep == 1) {
-      if (_expController.text.isEmpty || _skillsController.text.isEmpty) {
+      if (_expController.text.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please fill in your experience and specialization'),
+            content: Text('Please enter your years of experience'),
           ),
         );
         return;
       }
-    }
-
-    // Step 2: About
-    if (_currentStep == 2) {
       if (_bioController.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please provide an "About" description'),
+            content: Text('Please provide an "About Me" description'),
           ),
         );
         return;
       }
     }
 
-    // Step 3: Photos (exactly 3)
-    if (_currentStep == 3) {
+    // Step 2: Photos (exactly 3)
+    if (_currentStep == 2) {
       if (_galleryImages.length < 3) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please upload at least 3 photos')),

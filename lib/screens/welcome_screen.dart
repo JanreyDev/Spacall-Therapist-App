@@ -17,6 +17,7 @@ import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';
 import 'store_staff_screen.dart';
+import 'transaction_history_screen.dart';
 import '../widgets/luxury_success_modal.dart';
 import '../widgets/luxury_waiver_dialog.dart';
 
@@ -33,6 +34,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     with WidgetsBindingObserver {
   final ApiService _apiService = ApiService();
   bool _isOnline = false;
+  bool _isToggling = false;
+  DateTime? _lastToggleTime;
   String _currentAddress = 'Not set';
   int _directRequestCount = 0;
   int _nearbyRequestCount = 0;
@@ -225,13 +228,15 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 // If the dialog for this booking is open, close it
                 if (Navigator.canPop(context)) {
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        "This booking was already claimed by another therapist.",
-                      ),
-                      backgroundColor: Colors.orange,
-                      behavior: SnackBarBehavior.floating,
+                  showDialog(
+                    context: context,
+                    builder: (modalContext) => LuxurySuccessModal(
+                      isError: true,
+                      title: 'BOOKING CLAIMED',
+                      message:
+                          "This session has already been accepted by another therapist. Don't worry, more opportunities are coming!",
+                      buttonText: 'SEE OTHERS',
+                      onConfirm: () => Navigator.pop(modalContext),
                     ),
                   );
                 }
@@ -414,7 +419,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           // _currency = user['currency'] ?? 'PHP';
 
           // Synchronize online status with backend provider availability
-          if (provider != null) {
+          bool canSyncToggle =
+              !_isToggling &&
+              (_lastToggleTime == null ||
+                  DateTime.now().difference(_lastToggleTime!).inSeconds > 5);
+
+          if (provider != null && canSyncToggle) {
             _isOnline =
                 provider['is_available'] == true ||
                 provider['is_available'] == 1 ||
@@ -422,7 +432,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           }
 
           // Force local status offline if balance is insufficient (Double-check)
-          if (_walletBalance < 1000 && _isOnline) {
+          if (_walletBalance < 1000 && _isOnline && canSyncToggle) {
             _isOnline = false;
             _apiService.updateLocation(
               token: widget.userData['token'],
@@ -547,12 +557,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   Future<void> _fetchTransactions() async {
     try {
-      final transactions = await _apiService.getTransactions(
+      final response = await _apiService.getTransactions(
         widget.userData['token'],
       );
       if (mounted) {
         setState(() {
-          _transactions = transactions;
+          _transactions = response['data'] ?? [];
           _isTransactionsLoading = false;
         });
       }
@@ -1461,6 +1471,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     final previousState = _isOnline;
     setState(() {
       _isOnline = value;
+      _isToggling = true;
+      _lastToggleTime = DateTime.now();
     });
 
     try {
@@ -1469,10 +1481,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
       if (value) {
         try {
-          final position = await _determinePosition();
+          final position = _currentPosition ?? await _determinePosition();
           latitude = position.latitude;
           longitude = position.longitude;
-          await _getAddressFromLatLng(position);
+          if (_currentPosition == null) {
+            await _getAddressFromLatLng(position);
+            if (mounted) setState(() => _currentPosition = position);
+          }
         } catch (e) {
           if (!mounted) return;
 
@@ -1521,6 +1536,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       setState(() {
         _isOnline = previousState; // Revert to offline state on failure
       });
+    } finally {
+      if (mounted) setState(() => _isToggling = false);
     }
   }
 
@@ -1662,16 +1679,22 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           Row(
             children: [
               // Logout Button & Location (Left Group)
-              IconButton(
-                onPressed: _handleLogout,
-                icon: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  color: textColor.withOpacity(0.4),
-                  size: 20,
+              GestureDetector(
+                onTap: _handleLogout,
+                child: Container(
+                  padding: const EdgeInsets.only(
+                    right: 12.0,
+                    top: 8.0,
+                    bottom: 8.0,
+                  ),
+                  color: Colors.transparent, // increases hit area
+                  child: Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: textColor.withOpacity(0.4),
+                    size: 20,
+                  ),
                 ),
-                tooltip: 'Logout',
               ),
-              const SizedBox(width: 4),
               // Location Indicator
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -1707,39 +1730,38 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               ),
               const Spacer(),
               // Online Toggle (Right)
-              Container(
-                padding: const EdgeInsets.all(4),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      decoration: BoxDecoration(
-                        color: _isOnline ? goldColor : Colors.grey,
-                        shape: BoxShape.circle,
-                        boxShadow: _isOnline
-                            ? [
-                                BoxShadow(
-                                  color: goldColor.withOpacity(0.5),
-                                  blurRadius: 4,
-                                  spreadRadius: 1,
-                                ),
-                              ]
-                            : null,
-                      ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: _isOnline ? goldColor : Colors.grey,
+                      shape: BoxShape.circle,
+                      boxShadow: _isOnline
+                          ? [
+                              BoxShadow(
+                                color: goldColor.withOpacity(0.5),
+                                blurRadius: 4,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
                     ),
-                    Transform.scale(
-                      scale: 0.7,
-                      child: Switch.adaptive(
-                        value: _isOnline,
-                        onChanged: _toggleOnline,
-                        activeColor: goldColor,
-                        activeTrackColor: goldColor.withOpacity(0.3),
-                      ),
+                  ),
+                  Transform.scale(
+                    scale: 0.7,
+                    alignment: Alignment.centerRight,
+                    child: Switch.adaptive(
+                      value: _isOnline,
+                      onChanged: _toggleOnline,
+                      activeColor: goldColor,
+                      activeTrackColor: goldColor.withOpacity(0.3),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -3010,12 +3032,24 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               ),
             ),
             if (!_isTransactionsLoading && _transactions.isNotEmpty)
-              Text(
-                "SEE ALL",
-                style: TextStyle(
-                  color: goldColor.withOpacity(0.5),
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TransactionHistoryScreen(
+                        token: widget.userData['token'],
+                      ),
+                    ),
+                  );
+                },
+                child: Text(
+                  "SEE ALL",
+                  style: TextStyle(
+                    color: goldColor.withOpacity(0.5),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
           ],
@@ -3061,7 +3095,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 shrinkWrap: true,
                 padding: EdgeInsets.zero,
                 physics: const NeverScrollableScrollPhysics(),
-                itemCount: _transactions.length > 5 ? 5 : _transactions.length,
+                itemCount: _transactions.length > 4 ? 4 : _transactions.length,
                 itemBuilder: (context, index) {
                   final tx = _transactions[index];
                   return _buildTransactionCard(tx, themeProvider, goldColor);

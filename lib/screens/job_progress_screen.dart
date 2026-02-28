@@ -1978,8 +1978,8 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                   if (_currentStatus == 'en_route' && _totalDuration.isNotEmpty)
                     Text(
                       '$_totalDuration ($_totalDistance)',
-                      style: const TextStyle(
-                        color: Colors.greenAccent,
+                      style: TextStyle(
+                        color: goldColor.withOpacity(0.9),
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),

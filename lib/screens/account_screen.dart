@@ -849,8 +849,27 @@ class _AccountScreenState extends State<AccountScreen> {
     final currentTier = provider['current_tier'];
 
     // Extract stats
-    final int onlineMinutes = stats['total_online_minutes'] ?? 0;
-    final double onlineHours = onlineMinutes / 60.0;
+    int onlineMinutes = stats['total_online_minutes'] ?? 0;
+
+    // LIVE PROGRESS: If currently online, calculate minutes elapsed in this session
+    final lastOnlineStr = stats['last_online_at'];
+    if (lastOnlineStr != null) {
+      try {
+        final lastOnline = DateTime.parse(
+          lastOnlineStr.endsWith('Z') ? lastOnlineStr : '${lastOnlineStr}Z',
+        );
+        final liveSessionMinutes = DateTime.now()
+            .toUtc()
+            .difference(lastOnline)
+            .inMinutes;
+        if (liveSessionMinutes > 0) {
+          onlineMinutes += liveSessionMinutes;
+        }
+      } catch (e) {
+        debugPrint("Error parsing last_online_at: $e");
+      }
+    }
+
     final int extensions = stats['total_extensions'] ?? 0;
     final int bookings = stats['total_bookings'] ?? 0;
 
@@ -862,7 +881,10 @@ class _AccountScreenState extends State<AccountScreen> {
                 (t) => {
                   'name': t['name'] ?? 'Tier',
                   'level': t['level'] ?? 0,
-                  'hours': (t['online_hours_required'] ?? 0).toDouble(),
+                  'minutes':
+                      (t['online_minutes_required'] ??
+                              (t['online_hours_required'] ?? 0) * 60)
+                          .toDouble(),
                   'extensions': (t['extensions_required'] ?? 0).toDouble(),
                   'bookings': (t['bookings_required'] ?? 0).toDouble(),
                 },
@@ -872,23 +894,23 @@ class _AccountScreenState extends State<AccountScreen> {
             {
               'name': 'Tier 1',
               'level': 1,
-              'hours': 100,
-              'extensions': 50,
-              'bookings': 100,
+              'minutes': 6000.0,
+              'extensions': 50.0,
+              'bookings': 100.0,
             },
             {
               'name': 'Tier 2',
               'level': 2,
-              'hours': 500,
-              'extensions': 150,
-              'bookings': 250,
+              'minutes': 30000.0,
+              'extensions': 150.0,
+              'bookings': 250.0,
             },
             {
               'name': 'Tier 3',
               'level': 3,
-              'hours': 1000,
-              'extensions': 300,
-              'bookings': 500,
+              'minutes': 60000.0,
+              'extensions': 300.0,
+              'bookings': 500.0,
             },
           ];
 
@@ -974,9 +996,9 @@ class _AccountScreenState extends State<AccountScreen> {
             const SizedBox(height: 24),
             if (nextTier != null) ...[
               _buildStatProgress(
-                "Online Hours",
-                onlineHours,
-                nextTier['hours'].toDouble(),
+                "Online Minutes",
+                onlineMinutes.toDouble(),
+                nextTier['minutes'].toDouble(),
                 Icons.timer_outlined,
                 goldColor,
                 themeProvider,

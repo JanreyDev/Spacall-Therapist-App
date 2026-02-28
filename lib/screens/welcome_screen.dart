@@ -762,6 +762,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           children: [
             // Header with Gradient
             Container(
+              width: double.infinity,
               padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
               decoration: BoxDecoration(
                 gradient: LinearGradient(

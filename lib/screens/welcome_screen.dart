@@ -167,7 +167,46 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 _fetchDashboardStats();
                 _fetchTransactions();
               });
+
+              _apiService.listenForWalletUpdates(userId, (event) {
+                if (!mounted) return;
+                debugPrint(
+                  '[WelcomeScreen] 💰 REAL-TIME Wallet Update: $event',
+                );
+                _fetchProfile();
+                _fetchDashboardStats();
+                _fetchTransactions();
+
+                // Show a success modal if applicable
+                final balance = double.tryParse(
+                  event['newBalance']?.toString() ?? '',
+                );
+
+                showDialog(
+                  context: context,
+                  builder: (context) => LuxurySuccessModal(
+                    title: 'DEPOSIT SUCCESSFUL',
+                    message:
+                        'Your wallet has been topped up successfully.${balance != null ? ' New balance: ₱${balance.toStringAsFixed(2)}' : ''}',
+                    onConfirm: () => Navigator.pop(context),
+                  ),
+                );
+              });
             }
+
+            // Listen for Claimed Bookings (to remove from others' dashboards)
+            _apiService.listenForBookingClaimed((claimed) {
+              if (!mounted) return;
+              debugPrint(
+                '[WelcomeScreen] ⚡ REAL-TIME Booking Claimed: $claimed',
+              );
+              // Refresh counts immediately to remove the claimed booking
+              _checkActiveRequests();
+              _checkNearbyBookings();
+              if (widget.userData['user']?['customer_tier'] == 'store') {
+                _checkStoreRequests();
+              }
+            });
 
             debugPrint(
               '[WelcomeScreen] Real-time listeners active for provider $providerId and user $userId',

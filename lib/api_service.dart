@@ -276,6 +276,13 @@ class ApiService {
     });
   }
 
+  void listenForBookingClaimed(Function(dynamic) onBookingClaimed) {
+    _pusher.publicChannel('bookings', 'BookingClaimed').listen((data) {
+      debugPrint('[Pusher] BookingClaimed: $data');
+      onBookingClaimed(data);
+    });
+  }
+
   void listenForBookingUpdates(
     int bookingId,
     Function(dynamic) onBookingUpdated,
@@ -325,6 +332,15 @@ class ApiService {
         });
   }
 
+  void listenForWalletUpdates(int userId, Function(dynamic) onWalletUpdated) {
+    _pusher.privateChannel('App.Models.User.$userId', 'WalletUpdated').listen((
+      data,
+    ) {
+      debugPrint('[Pusher] WalletUpdated Event: $data');
+      onWalletUpdated(data);
+    });
+  }
+
   void listenForStoreStaffUpdates(
     int storeProfileId,
     Function(dynamic) onUpdated,
@@ -352,14 +368,8 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/entry'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'mobile_number': mobileNumber,
-          'app_type': 'therapist',
-        }),
+        headers: {'Accept': 'application/json'},
+        body: {'mobile_number': mobileNumber, 'app_type': 'therapist'},
       );
 
       if (response.statusCode == 200) {
@@ -379,15 +389,12 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/verify-otp'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
+        headers: {'Accept': 'application/json'},
+        body: {
           'mobile_number': mobileNumber,
           'otp': otp,
           'app_type': 'therapist',
-        }),
+        },
       );
 
       if (response.statusCode == 200) {
@@ -874,21 +881,19 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/auth/login-pin'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
+        headers: {'Accept': 'application/json'},
+        body: {
           'mobile_number': mobileNumber,
           'pin': pin,
           'app_type': 'therapist',
-        }),
+        },
       );
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {
         final error = jsonDecode(response.body);
+        print('Login PIN Error Body: ${response.body}');
         throw Exception(error['message'] ?? 'Login failed');
       }
     } catch (e) {

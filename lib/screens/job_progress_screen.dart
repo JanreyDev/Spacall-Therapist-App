@@ -272,6 +272,14 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
           final startedAt = bookingData['started_at']?.toString();
           _startCountdown(mins, startedAt: startedAt);
         }
+
+        // Trigger verification modal if code is now available
+        if (bookingData['verification_code'] != null &&
+            bookingData['verification_code'].toString().length == 6 &&
+            _currentStatus == 'completed') {
+          debugPrint('[REALTIME THERAPIST] Code received! Showing modal.');
+          _showVerificationCodeModal();
+        }
       }
     });
   }
@@ -623,7 +631,11 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         _stopNavMode();
         _showArrivedModal();
       } else if (status == 'completed') {
-        _showVerificationCodeModal();
+        // We no longer show the modal immediately.
+        // We wait for the client to review, which will trigger a real-time event.
+        debugPrint(
+          '[JobProgress] Status is completed. Waiting for client review code...',
+        );
       } else if (status == 'cancelled') {
         if (mounted) Navigator.pop(context, 'switch_to_sessions');
       }

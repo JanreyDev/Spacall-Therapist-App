@@ -1827,30 +1827,82 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           ),
                         ),
                         const SizedBox(width: 8),
-                        if (user?['customer_tier'] != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: goldColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: goldColor.withOpacity(0.4),
-                                width: 1,
+                        if (user != null)
+                          () {
+                            final provider =
+                                widget.userData['provider'] ??
+                                user!['provider'] ??
+                                {};
+                            final therapistProfile =
+                                provider['therapist_profile'] ?? {};
+                            final vipStatus =
+                                (therapistProfile['vip_status'] ?? '')
+                                    .toString()
+                                    .toLowerCase();
+                            final currentTier = provider['current_tier'];
+                            final int currentLevel = currentTier?['level'] ?? 0;
+                            final tier =
+                                (user!['customer_tier'] ??
+                                        user!['therapist_tier'] ??
+                                        'standard')
+                                    .toString()
+                                    .toLowerCase();
+
+                            // Consistent logic: VIP if tier is vip, or approved (unless explicitly classic), or level > 0
+                            final isVip =
+                                tier == 'vip' ||
+                                (vipStatus == 'approved' &&
+                                    tier != 'classic') ||
+                                currentLevel > 0;
+
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 3,
                               ),
-                            ),
-                            child: Text(
-                              user!['customer_tier'].toString().toUpperCase(),
-                              style: TextStyle(
-                                color: goldColor,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.0,
+                              decoration: BoxDecoration(
+                                color: isVip
+                                    ? null
+                                    : goldColor.withOpacity(0.15),
+                                gradient: isVip
+                                    ? const LinearGradient(
+                                        colors: [
+                                          Color(0xFFB8860B),
+                                          Color(0xFFD4AF37),
+                                          Color(0xFFFFD700),
+                                        ],
+                                      )
+                                    : null,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isVip
+                                      ? Colors.transparent
+                                      : goldColor.withOpacity(0.5),
+                                  width: 1,
+                                ),
                               ),
-                            ),
-                          ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.star,
+                                    color: isVip ? Colors.black : goldColor,
+                                    size: 10,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    isVip ? "VIP" : "CLASSIC",
+                                    style: TextStyle(
+                                      color: isVip ? Colors.black : goldColor,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }(),
                       ],
                     ),
                     const SizedBox(height: 4),

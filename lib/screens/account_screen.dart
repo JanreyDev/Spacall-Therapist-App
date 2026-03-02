@@ -227,7 +227,11 @@ class _AccountScreenState extends State<AccountScreen> {
     final int currentLevel = currentTier?['level'] ?? 0;
 
     final isActuallyPending = _isUpgradePending || vipStatus == 'pending';
-    final isVip = tier == 'vip' || vipStatus == 'approved' || currentLevel > 0;
+    // isVipStatus: true if tier is vip or approved manually (unless explicitly classic)
+    final isVipStatus =
+        tier == 'vip' || (vipStatus == 'approved' && tier != 'classic');
+    // isVip: true if status is VIP OR they have progressed in levels (PRO/EXPERT etc)
+    final isVip = isVipStatus || currentLevel > 0;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -300,32 +304,6 @@ class _AccountScreenState extends State<AccountScreen> {
                             ),
                           ),
                         ),
-                        Positioned(
-                          bottom: 5,
-                          right: 5,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: goldColor,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: backgroundColor,
-                                width: 3,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.3),
-                                  blurRadius: 5,
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.edit_outlined,
-                              size: 14,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 24),
@@ -378,12 +356,12 @@ class _AccountScreenState extends State<AccountScreen> {
                       ),
                     const SizedBox(height: 20),
                     Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isVip ? 20 : 16,
-                        vertical: isVip ? 10 : 6,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        color: isVip ? null : goldColor.withOpacity(0.1),
+                        color: isVip ? null : goldColor.withOpacity(0.15),
                         gradient: isVip
                             ? const LinearGradient(
                                 colors: [
@@ -394,9 +372,11 @@ class _AccountScreenState extends State<AccountScreen> {
                               )
                             : null,
                         borderRadius: BorderRadius.circular(20),
-                        border: isVip
-                            ? null
-                            : Border.all(color: goldColor.withOpacity(0.3)),
+                        border: Border.all(
+                          color: isVip
+                              ? Colors.transparent
+                              : goldColor.withOpacity(0.5),
+                        ),
                         boxShadow: isVip
                             ? [
                                 BoxShadow(
@@ -411,22 +391,17 @@ class _AccountScreenState extends State<AccountScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            isVip ? Icons.star : Icons.person_outline,
+                            Icons.star,
                             color: isVip ? Colors.black : goldColor,
-                            size: isVip ? 18 : 14,
+                            size: 18,
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            isVip
-                                ? "VIP ACCOUNT"
-                                : (tier == 'store'
-                                      ? "STORE ACCOUNT"
-                                      : "STANDARD ACCOUNT"),
+                            isVip ? "VIP Membership" : "Classic Membership",
                             style: TextStyle(
                               color: isVip ? Colors.black : goldColor,
-                              fontSize: isVip ? 14 : 10,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: isVip ? 0.5 : 1.2,
+                              fontSize: 14,
                             ),
                           ),
                         ],
@@ -437,8 +412,8 @@ class _AccountScreenState extends State<AccountScreen> {
                 ),
               ),
 
-              // JOIN VIP Promo Banner (Only if not VIP and NOT a store)
-              if (!isVip && !isActuallyPending && tier != 'store')
+              // JOIN VIP Promo Banner (Only if NOT already approved or pending)
+              if (!isVipStatus && !isActuallyPending && tier != 'store')
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Container(
@@ -508,7 +483,7 @@ class _AccountScreenState extends State<AccountScreen> {
                               ),
                               const SizedBox(height: 16),
                               const Text(
-                                "UPGRADE TO VIP",
+                                "JOIN THE VIP CLUB",
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 22,
@@ -518,7 +493,7 @@ class _AccountScreenState extends State<AccountScreen> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                "Unlock higher service fees, priority placement, and exclusive rewards.",
+                                "Unlock exclusive benefits, priority bookings, and luxury rewards.",
                                 style: TextStyle(
                                   color: Colors.white.withOpacity(0.6),
                                   fontSize: 13,
@@ -573,7 +548,7 @@ class _AccountScreenState extends State<AccountScreen> {
                                       }
                                     },
                                     child: const Text(
-                                      "APPLY NOW",
+                                      "UPGRADE NOW",
                                       style: TextStyle(
                                         color: Colors.black,
                                         fontWeight: FontWeight.w900,

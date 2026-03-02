@@ -1,7 +1,10 @@
 import 'dart:async';
-import 'dart:math' as math;
+import 'dart:math';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'welcome_screen.dart';
 import 'onboarding_screen.dart';
 
 class AnimatedLogoScreen extends StatefulWidget {
@@ -15,7 +18,7 @@ class _AnimatedLogoScreenState extends State<AnimatedLogoScreen>
     with TickerProviderStateMixin {
   late AnimationController _mainController;
   final List<SparkleData> _sparkles = [];
-  final math.Random _random = math.Random();
+  final Random _random = Random();
 
   @override
   void initState() {
@@ -31,16 +34,28 @@ class _AnimatedLogoScreenState extends State<AnimatedLogoScreen>
   }
 
   Future<void> _checkLocationAndProceed() async {
-    // Wait for at least part of the splash animation to play (e.g. 5 seconds min)
-    await Future.delayed(const Duration(seconds: 5));
+    // Wait for at least part of the splash animation to play (e.g. 2 seconds min)
+    await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
 
-    bool serviceEnabled;
-    LocationPermission permission;
+    bool serviceEnabled = false;
+    try {
+      // Check if location services are enabled with a timeout
+      serviceEnabled = await Geolocator.isLocationServiceEnabled().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => false,
+      );
+    } catch (e) {
+      debugPrint('[Splash] Location check error: $e');
+    }
 
-    // Check if location services are enabled
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      // If it hangs or is disabled, we still proceed for now or show dialog
+      // For better UX during deep linking, if it fails quickly we just proceed
+      _proceedToNextScreen();
+      return;
+    }
     if (!serviceEnabled) {
       _showLocationRequiredDialog(
         'Location Services Disabled',
@@ -49,7 +64,7 @@ class _AnimatedLogoScreenState extends State<AnimatedLogoScreen>
       return;
     }
 
-    permission = await Geolocator.checkPermission();
+    LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
@@ -76,7 +91,31 @@ class _AnimatedLogoScreenState extends State<AnimatedLogoScreen>
   Future<void> _proceedToNextScreen() async {
     if (!mounted) return;
 
-    // For now we just route to Onboarding/Login.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userDataStr = prefs.getString('user_data');
+
+      if (userDataStr != null && userDataStr.isNotEmpty) {
+        final userData = jsonDecode(userDataStr);
+        if (userData != null && userData['token'] != null) {
+          debugPrint(
+            '[AUTO-LOGIN] User session found. Redirecting to WelcomeScreen.',
+          );
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => WelcomeScreen(userData: userData),
+            ),
+          );
+          return;
+        }
+      }
+    } catch (e) {
+      debugPrint('[AUTO-LOGIN] Error parsing user data: $e');
+    }
+
+    debugPrint(
+      '[AUTO-LOGIN] No session found. Redirecting to OnboardingScreen.',
+    );
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (context) => const OnboardingScreen()),
     );

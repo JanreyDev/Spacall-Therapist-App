@@ -13,6 +13,7 @@ import 'package:intl/intl.dart';
 import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:app_links/app_links.dart';
 import 'job_progress_screen.dart';
 import 'booking_history_screen.dart';
 import 'account_screen.dart';
@@ -47,6 +48,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   Timer? _pollingTimer;
   Timer? _monitorPaymentTimer;
   int _selectedIndex = 0;
+  StreamSubscription? _deepLinkSub;
   Position? _currentPosition;
   int? _lastNearbyBookingId;
 
@@ -88,6 +90,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     _startPolling();
     // Initialize WebSocket immediately — do NOT wait for GPS/toggleOnline
     _initRealtimeListeners();
+    // Listen for deep links (payment redirect back from PayMongo)
+    _initDeepLinks();
     // Check for waiver acceptance
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) _checkWaiver();
@@ -98,10 +102,27 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      debugPrint('[WelcomeScreen] App resumed — Refreshing profile and wallet');
-      _fetchProfile();
-      _fetchDashboardStats();
-      _fetchTransactions();
+      debugPrint(
+        '[WelcomeScreen] App resumed — Verifying pending payments and refreshing',
+      );
+      // Verify any pending PayMongo transactions first
+      _apiService
+          .verifyPendingTransactions(widget.userData['token'])
+          .then((result) {
+            if (result['completed'] != null && result['completed'] > 0) {
+              debugPrint(
+                'Verified ${result['completed']} pending transaction(s)',
+              );
+            }
+          })
+          .catchError((e) {
+            debugPrint('Error verifying pending transactions: $e');
+          })
+          .whenComplete(() {
+            _fetchProfile();
+            _fetchDashboardStats();
+            _fetchTransactions();
+          });
     }
   }
 
@@ -263,10 +284,55 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         });
   }
 
+  void _initDeepLinks() {
+    final appLinks = AppLinks();
+
+    // Check for initial link when app is opened from a deep link
+    appLinks.getInitialLink().then((uri) {
+      if (uri != null) _handleDeepLink(uri);
+    });
+
+    _deepLinkSub = appLinks.uriLinkStream.listen((Uri uri) {
+      _handleDeepLink(uri);
+    });
+  }
+
+  void _handleDeepLink(Uri uri) {
+    debugPrint('[DeepLink] Received: $uri');
+    try {
+      if (uri.toString().contains('payment')) {
+        debugPrint(
+          '[DeepLink] 💳 Payment related link detected — Verifying...',
+        );
+        // Payment redirect — verify pending transactions and refresh
+        _apiService
+            .verifyPendingTransactions(widget.userData['token'])
+            .then((result) {
+              if (mounted) {
+                debugPrint('[DeepLink] Verification triggered from link');
+              }
+            })
+            .catchError((e) {
+              debugPrint('Deep link verify error: $e');
+            })
+            .whenComplete(() {
+              if (mounted) {
+                _fetchProfile();
+                _fetchDashboardStats();
+                _fetchTransactions();
+              }
+            });
+      }
+    } catch (e) {
+      debugPrint('[DeepLink] ❌ Error in _handleDeepLink: $e');
+    }
+  }
+
   @override
   void dispose() {
     _pollingTimer?.cancel();
     _monitorPaymentTimer?.cancel();
+    _deepLinkSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -1104,6 +1170,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       // Clear local auth token
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('auth_token');
+      await prefs.remove('user_data');
 
       if (!mounted) return;
 

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pinput/pinput.dart';
@@ -91,6 +92,10 @@ class _LoginScreenState extends State<LoginScreen> {
       final response = await _apiService.loginPin(_savedNumber!, pin);
 
       if (!mounted) return;
+
+      // Save user data for auto-login
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_data', jsonEncode(response));
 
       Navigator.pushReplacement(
         context,

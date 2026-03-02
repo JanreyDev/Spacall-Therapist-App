@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:pinput/pinput.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -84,6 +85,8 @@ class _OtpScreenState extends State<OtpScreen> {
       if (response['next_step'] == 'dashboard') {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('last_mobile_number', widget.mobileNumber);
+        // Save user data for auto-login
+        await prefs.setString('user_data', jsonEncode(response));
 
         if (!mounted) return;
         Navigator.pushReplacement(

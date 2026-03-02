@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../api_service.dart';
 import '../theme_provider.dart';
 import '../widgets/safe_network_image.dart';
@@ -24,42 +25,61 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final ImagePicker _picker = ImagePicker();
 
   late TextEditingController _firstNameController;
+  late TextEditingController _middleNameController;
   late TextEditingController _lastNameController;
   late TextEditingController _nicknameController;
   late TextEditingController _dobController;
+  late TextEditingController _ageController;
   late TextEditingController _emailController;
 
   String? _gender;
   File? _imageFile;
   bool _isLoading = false;
+  String? _dateOfBirth;
 
   @override
   void initState() {
     super.initState();
     final user = widget.userData['user'] ?? {};
     _firstNameController = TextEditingController(text: user['first_name']);
+    _middleNameController = TextEditingController(text: user['middle_name']);
     _lastNameController = TextEditingController(text: user['last_name']);
-    _nicknameController = TextEditingController(
-      text: user['nickname'] ?? user['middle_name'],
-    );
+    _nicknameController = TextEditingController(text: user['nickname']);
     _emailController = TextEditingController(text: user['email']);
     _dateOfBirth = user['date_of_birth'];
     _dobController = TextEditingController(
-      text: _dateOfBirth != null
+      text: _dateOfBirth != null && _dateOfBirth!.isNotEmpty
           ? DateFormat('MMMM d, yyyy').format(DateTime.parse(_dateOfBirth!))
           : '',
     );
+    _ageController = TextEditingController(text: user['age']?.toString() ?? '');
     _gender = user['gender'];
+
+    if (_ageController.text.isEmpty && _dateOfBirth != null) {
+      _calculateAge(DateTime.parse(_dateOfBirth!));
+    }
   }
 
-  String? _dateOfBirth;
+  void _calculateAge(DateTime birthDate) {
+    DateTime today = DateTime.now();
+    int age = today.year - birthDate.year;
+    if (today.month < birthDate.month ||
+        (today.month == birthDate.month && today.day < birthDate.day)) {
+      age--;
+    }
+    setState(() {
+      _ageController.text = age.toString();
+    });
+  }
 
   @override
   void dispose() {
     _firstNameController.dispose();
+    _middleNameController.dispose();
     _lastNameController.dispose();
     _nicknameController.dispose();
     _dobController.dispose();
+    _ageController.dispose();
     _emailController.dispose();
     super.dispose();
   }
@@ -67,9 +87,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _pickImage() async {
     final XFile? pickedFile = await _picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 600,
-      maxHeight: 600,
-      imageQuality: 70,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 85,
     );
 
     if (pickedFile != null) {
@@ -107,6 +127,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       setState(() {
         _dateOfBirth = DateFormat('yyyy-MM-dd').format(picked);
         _dobController.text = DateFormat('MMMM d, yyyy').format(picked);
+        _calculateAge(picked);
       });
     }
   }
@@ -120,8 +141,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final updatedData = await _apiService.updateUserProfile(
         token: widget.userData['token'],
         firstName: _firstNameController.text.trim(),
+        middleName: _middleNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         nickname: _nicknameController.text.trim(),
+        age: _ageController.text.trim(),
         dateOfBirth: _dateOfBirth,
         email: _emailController.text.trim(),
         gender: _gender,
@@ -138,7 +161,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         context: context,
         builder: (context) => LuxurySuccessModal(
           title: 'PROFILE UPDATED',
-          message: 'Your personal information has been successfully updated.',
+          message:
+              'Your profile has been successfully updated with the new information.',
           onConfirm: () {
             Navigator.pop(context); // Close dialog
             Navigator.pop(context, true); // Close screen
@@ -164,13 +188,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDark = themeProvider.isDarkMode;
-    final goldColor = const Color(0xFFEBC14F);
-    final backgroundColor = isDark ? Colors.black : Colors.white;
-    final cardColor = isDark
-        ? const Color(0xFF1A1A1A)
-        : const Color(0xFFF5F5F5);
+    const goldColor = Color(0xFFEBC14F);
+    final backgroundColor = isDark ? Colors.black : const Color(0xFFF8F8F8);
+    final cardColor = isDark ? const Color(0xFF121212) : Colors.white;
     final textColor = themeProvider.textColor;
-    final hintColor = textColor.withOpacity(0.5);
 
     final user = widget.userData['user'] ?? {};
     String? profileUrl = ApiService.normalizePhotoUrl(
@@ -179,275 +200,420 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: backgroundColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textColor),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          "Edit Profile",
-          style: TextStyle(color: textColor, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          if (_isLoading)
-            Center(
+      body: CustomScrollView(
+        slivers: [
+          _buildAppBar(backgroundColor, textColor),
+          SliverToBoxAdapter(
+            child: Form(
+              key: _formKey,
               child: Padding(
-                padding: const EdgeInsets.only(right: 16.0),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: goldColor,
-                  ),
-                ),
-              ),
-            )
-          else
-            TextButton(
-              onPressed: _saveProfile,
-              child: Text(
-                "SAVE",
-                style: TextStyle(
-                  color: goldColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 20),
+                    _buildProfileImagePicker(
+                      profileUrl,
+                      goldColor,
+                      backgroundColor,
+                    ),
+                    const SizedBox(height: 40),
+
+                    _buildFullWidthSection("BASIC INFORMATION", [
+                      _buildPremiumField(
+                        label: "Nickname",
+                        controller: _nicknameController,
+                        hint: "Expert Nickname",
+                        icon: Icons.alternate_email_rounded,
+                        textColor: textColor,
+                        goldColor: goldColor,
+                        cardColor: cardColor,
+                      ),
+                      const SizedBox(height: 20),
+                      _buildPremiumField(
+                        label: "First Name",
+                        controller: _firstNameController,
+                        hint: "Enter first name",
+                        icon: Icons.person_outline_rounded,
+                        textColor: textColor,
+                        goldColor: goldColor,
+                        cardColor: cardColor,
+                      ),
+                      const SizedBox(height: 20),
+                      _buildPremiumField(
+                        label: "Middle Name",
+                        controller: _middleNameController,
+                        hint: "Optional middle name",
+                        icon: Icons.person_outline_rounded,
+                        textColor: textColor,
+                        goldColor: goldColor,
+                        cardColor: cardColor,
+                        required: false,
+                      ),
+                      const SizedBox(height: 20),
+                      _buildPremiumField(
+                        label: "Last Name",
+                        controller: _lastNameController,
+                        hint: "Enter last name",
+                        icon: Icons.person_outline_rounded,
+                        textColor: textColor,
+                        goldColor: goldColor,
+                        cardColor: cardColor,
+                      ),
+                    ]),
+
+                    const SizedBox(height: 32),
+
+                    _buildFullWidthSection("PERSONAL DETAILS", [
+                      GestureDetector(
+                        onTap: () => _selectDate(context),
+                        child: AbsorbPointer(
+                          child: _buildPremiumField(
+                            label: "Date of Birth",
+                            controller: _dobController,
+                            hint: "Select birth date",
+                            icon: Icons.calendar_month_rounded,
+                            textColor: textColor,
+                            goldColor: goldColor,
+                            cardColor: cardColor,
+                            readOnly: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _buildPremiumField(
+                        label: "Age",
+                        controller: _ageController,
+                        hint: "Calculated age",
+                        icon: Icons.auto_graph_rounded,
+                        textColor: textColor,
+                        goldColor: goldColor,
+                        cardColor: cardColor,
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 20),
+                      _buildGenderPicker(textColor, goldColor, cardColor),
+                    ]),
+
+                    const SizedBox(height: 32),
+
+                    _buildFullWidthSection("CONTACT INFO", [
+                      _buildPremiumField(
+                        label: "Email Address",
+                        controller: _emailController,
+                        hint: "your@email.com",
+                        icon: Icons.email_outlined,
+                        textColor: textColor,
+                        goldColor: goldColor,
+                        cardColor: cardColor,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                    ]),
+
+                    const SizedBox(height: 60),
+                    _buildSaveButton(goldColor),
+                    const SizedBox(height: 40),
+                  ],
                 ),
               ),
             ),
+          ),
         ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Profile Picture
-                Center(
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: goldColor.withOpacity(0.5),
-                            width: 2,
-                          ),
-                          color: cardColor,
-                        ),
-                        child: ClipOval(
-                          child: _imageFile != null
-                              ? Image.file(_imageFile!, fit: BoxFit.cover)
-                              : (profileUrl != null && profileUrl.isNotEmpty
-                                    ? SafeNetworkImage(
-                                        url: profileUrl,
-                                        fit: BoxFit.cover,
-                                        errorWidget: Icon(
-                                          Icons.person,
-                                          size: 60,
-                                          color: goldColor,
-                                        ),
-                                      )
-                                    : Icon(
-                                        Icons.person,
-                                        size: 60,
-                                        color: goldColor,
-                                      )),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: GestureDetector(
-                          onTap: _pickImage,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: goldColor,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: backgroundColor,
-                                width: 2,
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.camera_alt,
-                              size: 16,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
+    );
+  }
 
-                // Form Fields
-                _buildLabel("First Name", textColor),
-                _buildTextField(
-                  controller: _firstNameController,
-                  hint: "Enter your first name",
-                  icon: Icons.person_outline,
-                  cardColor: cardColor,
-                  textColor: textColor,
-                  hintColor: hintColor,
-                  goldColor: goldColor,
-                ),
-                const SizedBox(height: 20),
+  Widget _buildAppBar(Color bgColor, Color textColor) {
+    return SliverAppBar(
+      backgroundColor: bgColor,
+      floating: true,
+      elevation: 0,
+      centerTitle: true,
+      leading: IconButton(
+        icon: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: textColor,
+            size: 18,
+          ),
+        ),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: Text(
+        "EDIT PROFILE",
+        style: GoogleFonts.outfit(
+          color: textColor,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 2,
+          fontSize: 16,
+        ),
+      ),
+    );
+  }
 
-                _buildLabel("Last Name", textColor),
-                _buildTextField(
-                  controller: _lastNameController,
-                  hint: "Enter your last name",
-                  icon: Icons.person_outline,
-                  cardColor: cardColor,
-                  textColor: textColor,
-                  hintColor: hintColor,
-                  goldColor: goldColor,
-                ),
-                const SizedBox(height: 20),
-
-                _buildLabel("Nickname", textColor),
-                _buildTextField(
-                  controller: _nicknameController,
-                  hint: "Enter your nickname",
-                  icon: Icons.badge_outlined,
-                  cardColor: cardColor,
-                  textColor: textColor,
-                  hintColor: hintColor,
-                  goldColor: goldColor,
-                ),
-                const SizedBox(height: 20),
-
-                _buildLabel("Date of Birth & Age", textColor),
-                GestureDetector(
-                  onTap: () => _selectDate(context),
-                  child: AbsorbPointer(
-                    child: _buildTextField(
-                      controller: _dobController,
-                      hint: "Select your date of birth",
-                      icon: Icons.calendar_today_outlined,
-                      cardColor: cardColor,
-                      textColor: textColor,
-                      hintColor: hintColor,
-                      goldColor: goldColor,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                _buildLabel("Email Address", textColor),
-                _buildTextField(
-                  controller: _emailController,
-                  hint: "Enter your email",
-                  icon: Icons.email_outlined,
-                  cardColor: cardColor,
-                  textColor: textColor,
-                  hintColor: hintColor,
-                  goldColor: goldColor,
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 20),
-
-                _buildLabel("Gender", textColor),
-                Container(
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.transparent),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _gender,
-                      dropdownColor: cardColor,
-                      icon: Icon(Icons.arrow_drop_down, color: goldColor),
-                      style: TextStyle(color: textColor, fontSize: 16),
-                      hint: Text(
-                        "Select Gender",
-                        style: TextStyle(color: hintColor),
-                      ),
-                      items: ['male', 'female', 'lgbt'].map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(
-                            value[0].toUpperCase() + value.substring(1),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (newValue) {
-                        setState(() {
-                          _gender = newValue;
-                        });
-                      },
-                    ),
-                  ),
+  Widget _buildProfileImagePicker(
+    String? profileUrl,
+    Color goldColor,
+    Color bgColor,
+  ) {
+    return Center(
+      child: Stack(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [goldColor, goldColor.withOpacity(0.2)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: goldColor.withOpacity(0.2),
+                  blurRadius: 20,
+                  spreadRadius: 2,
                 ),
               ],
             ),
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: bgColor),
+              child: ClipOval(
+                child: _imageFile != null
+                    ? Image.file(_imageFile!, fit: BoxFit.cover)
+                    : (profileUrl != null && profileUrl.isNotEmpty
+                          ? SafeNetworkImage(
+                              url: profileUrl,
+                              fit: BoxFit.cover,
+                              errorWidget: Icon(
+                                Icons.person_rounded,
+                                size: 60,
+                                color: goldColor.withOpacity(0.5),
+                              ),
+                            )
+                          : Icon(
+                              Icons.person_rounded,
+                              size: 60,
+                              color: goldColor.withOpacity(0.5),
+                            )),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 4,
+            right: 4,
+            child: GestureDetector(
+              onTap: _pickImage,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: goldColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: bgColor, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 10,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.camera_alt_rounded,
+                  size: 18,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFullWidthSection(String title, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 16),
+          child: Text(
+            title,
+            style: GoogleFonts.outfit(
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFFEBC14F).withOpacity(0.7),
+              letterSpacing: 1.5,
+            ),
           ),
         ),
-      ),
+        ...children,
+      ],
     );
   }
 
-  Widget _buildLabel(String label, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0, left: 4),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
+  Widget _buildPremiumField({
+    required String label,
     required TextEditingController controller,
     required String hint,
     required IconData icon,
-    required Color cardColor,
     required Color textColor,
-    required Color hintColor,
     required Color goldColor,
+    required Color cardColor,
+    bool required = true,
+    bool readOnly = false,
     TextInputType keyboardType = TextInputType.text,
   }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.05)),
+          ),
+          child: TextFormField(
+            controller: controller,
+            readOnly: readOnly,
+            style: GoogleFonts.outfit(
+              color: textColor,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+            keyboardType: keyboardType,
+            validator: required
+                ? (value) =>
+                      (value == null || value.isEmpty) ? 'Required' : null
+                : null,
+            decoration: InputDecoration(
+              labelText: label,
+              labelStyle: GoogleFonts.outfit(
+                color: textColor.withOpacity(0.4),
+                fontSize: 13,
+              ),
+              hintText: hint,
+              hintStyle: TextStyle(color: textColor.withOpacity(0.2)),
+              prefixIcon: Icon(
+                icon,
+                color: goldColor.withOpacity(0.6),
+                size: 20,
+              ),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 16,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGenderPicker(Color textColor, Color goldColor, Color cardColor) {
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.transparent),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
-      child: TextFormField(
-        controller: controller,
-        style: TextStyle(color: textColor),
-        keyboardType: keyboardType,
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'This field is required';
-          }
-          return null;
-        },
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: hintColor),
-          prefixIcon: Icon(icon, color: goldColor.withOpacity(0.7)),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
+      child: DropdownButtonHideUnderline(
+        child: DropdownButtonFormField<String>(
+          value: _gender,
+          dropdownColor: cardColor,
+          elevation: 16,
+          decoration: InputDecoration(
+            labelText: "Gender",
+            labelStyle: GoogleFonts.outfit(
+              color: textColor.withOpacity(0.4),
+              fontSize: 13,
+            ),
+            border: InputBorder.none,
+            prefixIcon: Icon(
+              Icons.transgender_rounded,
+              color: goldColor.withOpacity(0.6),
+              size: 20,
+            ),
+            contentPadding: EdgeInsets.zero,
           ),
+          icon: Padding(
+            padding: const EdgeInsets.only(right: 20),
+            child: Icon(Icons.expand_more_rounded, color: goldColor),
+          ),
+          style: GoogleFonts.outfit(
+            color: textColor,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+          hint: Text(
+            "Select Gender",
+            style: TextStyle(color: textColor.withOpacity(0.2)),
+          ),
+          items: ['male', 'female', 'lgbt'].map((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
+              child: Text(value[0].toUpperCase() + value.substring(1)),
+            );
+          }).toList(),
+          onChanged: (newValue) => setState(() => _gender = newValue),
+          validator: (value) => value == null ? 'Required' : null,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSaveButton(Color goldColor) {
+    return GestureDetector(
+      onTap: _isLoading ? null : _saveProfile,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        width: double.infinity,
+        height: 64,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            colors: _isLoading
+                ? [Colors.grey.shade800, Colors.grey.shade900]
+                : [const Color(0xFFB8860B), goldColor, const Color(0xFFFFD700)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            if (!_isLoading)
+              BoxShadow(
+                color: goldColor.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+          ],
+        ),
+        child: Center(
+          child: _isLoading
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : Text(
+                  'UPDATE PROFILE',
+                  style: GoogleFonts.outfit(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    letterSpacing: 2,
+                  ),
+                ),
         ),
       ),
     );

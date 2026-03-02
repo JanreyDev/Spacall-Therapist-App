@@ -970,6 +970,8 @@ class ApiService {
     String? firstName,
     String? lastName,
     String? nickname,
+    String? middleName,
+    String? age,
     String? dateOfBirth,
     String? email,
     String? gender,
@@ -987,6 +989,8 @@ class ApiService {
       if (firstName != null) request.fields['first_name'] = firstName;
       if (lastName != null) request.fields['last_name'] = lastName;
       if (nickname != null) request.fields['nickname'] = nickname;
+      if (middleName != null) request.fields['middle_name'] = middleName;
+      if (age != null) request.fields['age'] = age;
       if (dateOfBirth != null) request.fields['date_of_birth'] = dateOfBirth;
       if (email != null) request.fields['email'] = email;
       if (gender != null) request.fields['gender'] = gender;

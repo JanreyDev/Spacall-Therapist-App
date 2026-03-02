@@ -48,6 +48,14 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    if (phone.length != 11) {
+      _showLuxuryDialog(
+        'Invalid mobile number. Please check the number carefully.',
+        isError: true,
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -129,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -182,10 +190,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
-              const Spacer(),
+              const SizedBox(height: 100),
               if (_isLoading) ...[
                 const RotatingFlowerLoader(size: 80),
-                const Spacer(),
+                const SizedBox(height: 40),
               ],
               Text(
                 _getGreeting(),
@@ -345,8 +353,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
+                  maxLength: 11,
                   style: const TextStyle(color: Colors.white, fontSize: 18),
                   decoration: InputDecoration(
+                    counterText: "", // Hide character counter
                     hintText: '09XXXXXXXXX',
                     hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
                     prefixIcon: Icon(
@@ -375,7 +385,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-                const Spacer(flex: 3),
+                const SizedBox(height: 80),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Text(

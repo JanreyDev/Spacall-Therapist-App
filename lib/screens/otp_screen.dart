@@ -139,7 +139,19 @@ class _OtpScreenState extends State<OtpScreen> {
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
+      appBar: AppBar(
+        backgroundColor: backgroundColor,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: goldColor,
+            size: 20,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -148,114 +160,125 @@ class _OtpScreenState extends State<OtpScreen> {
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.start,
                   children: [
-                    Column(
-                      children: [
-                        const SizedBox(height: 60),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: goldColor,
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              const Text(
-                                'Verification',
-                                style: TextStyle(
-                                  fontSize: 34,
-                                  fontWeight: FontWeight.bold,
-                                  color: goldColor,
-                                  letterSpacing: 1.1,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Enter the 6-digit code sent to your phone',
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7),
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Pinput(
-                          length: 6,
-                          controller: _otpController,
-                          defaultPinTheme: defaultPinTheme,
-                          focusedPinTheme: focusedPinTheme,
-                          separatorBuilder: (index) => const SizedBox(width: 8),
-                          hapticFeedbackType: HapticFeedbackType.lightImpact,
-                          onCompleted: (pin) => _verifyOtp(),
-                          cursor: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Container(
-                                margin: const EdgeInsets.only(bottom: 9),
-                                width: 22,
-                                height: 2,
-                                color: goldColor,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        Text(
-                          _resendTimerCount > 0
-                              ? 'Resend code in ${_resendTimerCount}s'
-                              : 'You can now resend the code',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.5),
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 48),
-                        _isLoading
-                            ? const CircularProgressIndicator(color: goldColor)
-                            : _buildGoldButton(
-                                text: 'VERIFY & CONTINUE',
-                                onPressed: _verifyOtp,
-                              ),
-                        const SizedBox(height: 24),
-                        GestureDetector(
-                          onTap: _resendTimerCount == 0 ? _handleResend : null,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Text(
-                              _resendTimerCount == 0
-                                  ? 'Resend Now'
-                                  : "Didn't receive the code? Check your phone or wait for the timer.",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: _resendTimerCount == 0
-                                    ? goldColor
-                                    : Colors.white.withOpacity(0.4),
-                                fontSize: 13,
-                                fontWeight: _resendTimerCount == 0
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                                decoration: _resendTimerCount == 0
-                                    ? TextDecoration.underline
-                                    : null,
-                              ),
+                    const SizedBox(height: 80),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: goldColor,
+                              borderRadius: BorderRadius.circular(2),
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 24),
+                          const Text(
+                            'Verification',
+                            style: TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.bold,
+                              color: goldColor,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          RichText(
+                            text: TextSpan(
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                                fontSize: 16,
+                                height: 1.5,
+                                fontFamily:
+                                    'Inter', // Ensuring font consistency
+                              ),
+                              children: [
+                                const TextSpan(
+                                  text: 'Enter the 6-digit code sent to\n',
+                                ),
+                                TextSpan(
+                                  text: widget.mobileNumber,
+                                  style: const TextStyle(
+                                    color: goldColor,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(height: 100),
+                    Pinput(
+                      length: 6,
+                      controller: _otpController,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      defaultPinTheme: defaultPinTheme,
+                      focusedPinTheme: focusedPinTheme,
+                      separatorBuilder: (index) => const SizedBox(width: 8),
+                      hapticFeedbackType: HapticFeedbackType.lightImpact,
+                      onCompleted: (pin) => _verifyOtp(),
+                      cursor: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 9),
+                            width: 22,
+                            height: 2,
+                            color: goldColor,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    Text(
+                      _resendTimerCount > 0
+                          ? 'Resend code in ${_resendTimerCount}s'
+                          : 'You can now resend the code',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 48),
+                    _isLoading
+                        ? const CircularProgressIndicator(color: goldColor)
+                        : _buildGoldButton(
+                            text: 'VERIFY & CONTINUE',
+                            onPressed: _verifyOtp,
+                          ),
+                    const SizedBox(height: 24),
+                    GestureDetector(
+                      onTap: _resendTimerCount == 0 ? _handleResend : null,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text(
+                          _resendTimerCount == 0
+                              ? 'Resend Now'
+                              : "Didn't receive the code? Check your phone or wait for the timer.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _resendTimerCount == 0
+                                ? goldColor
+                                : Colors.white.withOpacity(0.4),
+                            fontSize: 13,
+                            fontWeight: _resendTimerCount == 0
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            decoration: _resendTimerCount == 0
+                                ? TextDecoration.underline
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
                     Padding(
                       padding: const EdgeInsets.only(bottom: 24.0),
                       child: Text(

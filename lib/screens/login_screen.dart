@@ -116,6 +116,39 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _handleForgotPin() async {
+    final phone = _showPinOnly ? _savedNumber : _phoneController.text.trim();
+
+    if (phone == null || phone.isEmpty) {
+      _showLuxuryDialog('Please enter your mobile number', isError: true);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await _apiService.forgotPin(phone);
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              OtpScreen(mobileNumber: phone, isResetPin: true),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showLuxuryDialog(
+        e.toString().replaceAll('Exception: ', ''),
+        isError: true,
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   void _switchAccount() {
     setState(() {
       _showPinOnly = false;
@@ -412,7 +445,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildTextLink('Help Center', () {}),
-                  _buildTextLink('Forgot PIN?', () {}),
+                  _buildTextLink('Forgot PIN?', _handleForgotPin),
                 ],
               ),
 
@@ -619,7 +652,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildTextLink('Help Center', () {}),
-                  _buildTextLink('Forgot PIN?', () {}),
+                  _buildTextLink('Forgot PIN?', _handleForgotPin),
                 ],
               ),
               const SizedBox(height: 32),

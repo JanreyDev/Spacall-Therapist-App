@@ -901,6 +901,48 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> forgotPin(String mobileNumber) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/forgot-pin'),
+        headers: {'Accept': 'application/json'},
+        body: {'mobile_number': mobileNumber},
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['message'] ?? 'Failed to send reset code');
+      }
+    } catch (e) {
+      throw Exception('Forgot PIN Error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> resetPin({
+    required String mobileNumber,
+    required String otp,
+    required String newPin,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/reset-pin'),
+        headers: {'Accept': 'application/json'},
+        body: {'mobile_number': mobileNumber, 'otp': otp, 'new_pin': newPin},
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        final error = jsonDecode(response.body);
+        throw Exception(error['message'] ?? 'Failed to reset PIN');
+      }
+    } catch (e) {
+      throw Exception('Reset PIN Error: $e');
+    }
+  }
+
   Future<void> logout(String token) async {
     try {
       final response = await http.post(

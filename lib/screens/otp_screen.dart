@@ -5,11 +5,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api_service.dart';
 import 'registration_screen.dart';
 import 'welcome_screen.dart';
+import 'reset_pin_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String mobileNumber;
+  final bool isResetPin;
 
-  const OtpScreen({super.key, required this.mobileNumber});
+  const OtpScreen({
+    super.key,
+    required this.mobileNumber,
+    this.isResetPin = false,
+  });
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -57,6 +63,20 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() => _isLoading = true);
 
     try {
+      if (widget.isResetPin) {
+        // Skip API verification here because it marks the OTP as used.
+        // /reset-pin requires an unused OTP. We'll verify it in the next screen.
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                ResetPinScreen(mobileNumber: widget.mobileNumber, otp: otp),
+          ),
+        );
+        return;
+      }
+
       final response = await _apiService.verifyOtp(widget.mobileNumber, otp);
 
       if (!mounted) return;

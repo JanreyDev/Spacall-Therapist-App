@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../widgets/currency_formatter.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
 import '../api_service.dart';
@@ -2081,319 +2084,293 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   void _showDepositDialog() {
-    final amountController = TextEditingController();
-    String selectedMethod = 'Paymongo';
-    const goldColor = Color(0xFFEBC14F);
-    final quickAmounts = [100.0, 500.0, 1000.0, 2000.0];
+    final amountController = TextEditingController(
+      text: NumberFormat('#,###').format(1000),
+    );
+    final goldColor = const Color(0xFFEBC14F);
+    final quickAmounts = [100.0, 200.0, 500.0, 1000.0];
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: const Color(0xFF0A0A0A),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(32),
-          side: BorderSide(color: goldColor.withOpacity(0.1), width: 1),
-        ),
-        child: StatefulBuilder(
-          builder: (context, setDialogState) => SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(28.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Add Funds',
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            top: 12,
+            left: 24,
+            right: 24,
+          ),
+          decoration: const BoxDecoration(
+            color: Color(0xFF0A0A0A),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black54,
+                blurRadius: 40,
+                spreadRadius: 10,
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Handle Bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: goldColor.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: goldColor.withOpacity(0.2)),
+                      ),
+                      child: Icon(
+                        Icons.add_card_rounded,
+                        color: goldColor,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'ADD FUNDS',
+                          style: GoogleFonts.outfit(
+                            color: goldColor,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2.0,
+                          ),
+                        ),
+                        Text(
+                          'Top up your therapist wallet',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.4),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 40),
+
+                // Amount Section
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Column(
+                      children: [
+                        Text(
+                          'ENTER AMOUNT',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.3),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        IntrinsicWidth(
+                          child: TextField(
+                            controller: amountController,
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            onChanged: (_) => setModalState(() {}),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              CurrencyInputFormatter(),
+                            ],
                             style: TextStyle(
                               color: goldColor,
-                              fontSize: 24,
+                              fontSize: 48,
                               fontWeight: FontWeight.w900,
-                              letterSpacing: -0.5,
+                              letterSpacing: -1,
+                            ),
+                            decoration: InputDecoration(
+                              prefixText: '$_currency',
+                              prefixStyle: TextStyle(
+                                color: goldColor.withOpacity(0.5),
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
                             ),
                           ),
-                          Text(
-                            'Top up your Therapist wallet',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.4),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                        ),
+                        Container(
+                          width: 120,
+                          height: 1,
+                          color: goldColor.withOpacity(0.3),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 40),
+
+                // Preset Amounts Grid
+                GridView.count(
+                  shrinkWrap: true,
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 2.5,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: quickAmounts.map((amt) {
+                    final isSelected =
+                        amountController.text.replaceAll(',', '') ==
+                        amt.toInt().toString();
+                    return GestureDetector(
+                      onTap: () => setModalState(
+                        () => amountController.text = NumberFormat(
+                          '#,###',
+                        ).format(amt.toInt()),
                       ),
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).pop(),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.05),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? goldColor
+                              : Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected
+                                ? goldColor
+                                : Colors.white.withOpacity(0.1),
+                          ),
+                          boxShadow: isSelected
+                              ? [
+                                  BoxShadow(
+                                    color: goldColor.withOpacity(0.2),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '₱${NumberFormat('#,###').format(amt.toInt())}',
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.black
+                                  : Colors.white.withOpacity(0.9),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
                             ),
                           ),
-                          child: Icon(
-                            Icons.close_rounded,
-                            color: Colors.white.withOpacity(0.5),
-                            size: 20,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+
+                const SizedBox(height: 32),
+
+                // Secure Notice
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.03),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.lock_outline_rounded,
+                        color: Colors.greenAccent.withOpacity(0.7),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Payment processed securely via Paymongo. GCash, Maya, and Card accepted.',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.4),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 32),
+                ),
 
-                  // Amount Section
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.02),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white.withOpacity(0.05)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'AMOUNT TO DEPOSIT',
-                          style: TextStyle(
-                            color: goldColor.withOpacity(0.5),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.5,
-                          ),
+                const SizedBox(height: 32),
+
+                // Action Button
+                GestureDetector(
+                  onTap: () {
+                    final amountText = amountController.text.replaceAll(
+                      ',',
+                      '',
+                    );
+                    final amount = double.tryParse(amountText) ?? 0.0;
+                    if (amount >= 100) {
+                      Navigator.pop(context);
+                      _handleDeposit(amount, 'Paymongo');
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Minimum deposit is ₱100'),
                         ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: amountController,
-                          keyboardType: TextInputType.number,
-                          onChanged: (_) => setDialogState(() {}),
-                          style: const TextStyle(
-                            color: goldColor,
-                            fontSize: 40,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -1,
-                          ),
-                          decoration: InputDecoration(
-                            prefixText: '$_currency ',
-                            prefixStyle: const TextStyle(
-                              color: goldColor,
-                              fontSize: 40,
-                              fontWeight: FontWeight.w900,
-                            ),
-                            border: InputBorder.none,
-                            hintText: '1,000.00',
-                            hintStyle: TextStyle(
-                              color: Colors.white.withOpacity(0.05),
-                              fontSize: 40,
-                              fontWeight: FontWeight.w900,
-                            ),
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Quick Amounts
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: quickAmounts.map((amt) {
-                        final isSelected =
-                            amountController.text == amt.toInt().toString();
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: GestureDetector(
-                            onTap: () => setDialogState(
-                              () => amountController.text = amt
-                                  .toInt()
-                                  .toString(),
-                            ),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 12,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: isSelected
-                                    ? LinearGradient(
-                                        colors: [
-                                          goldColor,
-                                          goldColor.withOpacity(0.7),
-                                        ],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      )
-                                    : null,
-                                color: isSelected
-                                    ? null
-                                    : Colors.white.withOpacity(0.03),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? Colors.transparent
-                                      : Colors.white.withOpacity(0.05),
-                                ),
-                              ),
-                              child: Text(
-                                '$_currency${NumberFormat('#,###').format(amt)}',
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? Colors.black
-                                      : Colors.white.withOpacity(0.6),
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Secure Checkout Box
-                  Container(
+                      );
+                    }
+                  },
+                  child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(24),
+                    height: 64,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [
-                          Colors.white.withOpacity(0.03),
-                          Colors.white.withOpacity(0.01),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
+                        colors: [goldColor, const Color(0xFFC5A03F)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(color: Colors.white.withOpacity(0.05)),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.greenAccent.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: const Row(
-                                children: [
-                                  Icon(
-                                    Icons.verified_user_rounded,
-                                    color: Colors.greenAccent,
-                                    size: 14,
-                                  ),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    'PAYMONGO SECURE',
-                                    style: TextStyle(
-                                      color: Colors.greenAccent,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 1.0,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildPaymentIcon(Icons.credit_card_rounded),
-                            const SizedBox(width: 16),
-                            _buildPaymentIcon(
-                              Icons.account_balance_wallet_rounded,
-                            ),
-                            const SizedBox(width: 16),
-                            _buildPaymentIcon(Icons.qr_code_scanner_rounded),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Select GCash, Maya, or Card at checkout',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.3),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: goldColor.withOpacity(0.3),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
                         ),
                       ],
                     ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Final Action Button
-                  GestureDetector(
-                    onTap: () {
-                      final amount =
-                          double.tryParse(amountController.text) ?? 0.0;
-                      if (amount >= 100) {
-                        _handleDeposit(amount, selectedMethod);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Minimum deposit is ${_currency}100'),
-                          ),
-                        );
-                      }
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [goldColor, Color(0xFFC5A03F)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: goldColor.withOpacity(0.3),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'PROCEED TO PAY',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.5,
-                          ),
+                    child: const Center(
+                      child: Text(
+                        'PROCEED TO PAYMENT',
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
                         ),
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 12),
+              ],
             ),
           ),
         ),
@@ -3295,16 +3272,5 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         debugPrint("[PAYMENT MONITOR] Error during payment check: $e");
       }
     });
-  }
-
-  Widget _buildPaymentIcon(IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Icon(icon, color: Colors.white70, size: 20),
-    );
   }
 }

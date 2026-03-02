@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:flutter/services.dart';
 
 class SpacallCameraScreen extends StatefulWidget {
@@ -21,7 +22,9 @@ class SpacallCameraScreen extends StatefulWidget {
 class _SpacallCameraScreenState extends State<SpacallCameraScreen> {
   CameraController? _controller;
   FaceDetector? _faceDetector;
+  TextRecognizer? _textRecognizer;
   bool _isBusy = false;
+  bool _isIdDetected = false;
   bool _captureComplete = false;
   bool _isProcessing = false;
   String _status = '';
@@ -39,7 +42,13 @@ class _SpacallCameraScreenState extends State<SpacallCameraScreen> {
     _initializeCamera();
     if (widget.isFace) {
       _initializeFaceDetector();
+    } else {
+      _initializeTextRecognizer();
     }
+  }
+
+  void _initializeTextRecognizer() {
+    _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
   }
 
   void _initializeFaceDetector() {
@@ -78,62 +87,106 @@ class _SpacallCameraScreenState extends State<SpacallCameraScreen> {
 
     setState(() {});
 
-    if (widget.isFace) {
+    if (widget.isFace || !widget.isFace) {
       _controller?.startImageStream(_processCameraImage);
     }
   }
 
   void _processCameraImage(CameraImage image) async {
-    if (_isBusy || _captureComplete || _isProcessing || !widget.isFace) return;
+    if (_isBusy || _captureComplete || _isProcessing) return;
     _isBusy = true;
 
     try {
       final inputImage = _inputImageFromCameraImage(image);
       if (inputImage == null) return;
 
-      final faces = await _faceDetector?.processImage(inputImage);
+      if (widget.isFace) {
+        final faces = await _faceDetector?.processImage(inputImage);
 
-      if (faces != null && faces.isNotEmpty) {
-        final face = faces.first;
+        if (faces != null && faces.isNotEmpty) {
+          final face = faces.first;
 
-        if (widget.isBlinkRequired) {
-          setState(() {
-            _status = 'Looking good! Now blink your eyes...';
-          });
+          if (widget.isBlinkRequired) {
+            setState(() {
+              _status = 'Looking good! Now blink your eyes...';
+            });
 
-          final double? leftEye = face.leftEyeOpenProbability;
-          final double? rightEye = face.rightEyeOpenProbability;
+            final double? leftEye = face.leftEyeOpenProbability;
+            final double? rightEye = face.rightEyeOpenProbability;
 
-          if (leftEye != null && rightEye != null) {
-            if (!_eyesOpened && leftEye > 0.7 && rightEye > 0.7) {
-              _eyesOpened = true;
-            } else if (_eyesOpened &&
-                !_eyesClosed &&
-                leftEye < 0.2 &&
-                rightEye < 0.2) {
-              _eyesClosed = true;
-            } else if (_eyesOpened &&
-                _eyesClosed &&
-                leftEye > 0.7 &&
-                rightEye > 0.7) {
-              _onCaptureRequested();
+            if (leftEye != null && rightEye != null) {
+              if (!_eyesOpened && leftEye > 0.7 && rightEye > 0.7) {
+                _eyesOpened = true;
+              } else if (_eyesOpened &&
+                  !_eyesClosed &&
+                  leftEye < 0.2 &&
+                  rightEye < 0.2) {
+                _eyesClosed = true;
+              } else if (_eyesOpened &&
+                  _eyesClosed &&
+                  leftEye > 0.7 &&
+                  rightEye > 0.7) {
+                _onCaptureRequested();
+              }
             }
+          } else {
+            // Face detected, no blink required (optional capture trigger)
+            setState(() {
+              _status = 'Face detected! Tap to capture.';
+            });
           }
         } else {
-          // Face detected, no blink required (optional capture trigger)
           setState(() {
-            _status = 'Face detected! Tap to capture.';
+            _status = 'Face not detected';
+            _eyesOpened = false;
+            _eyesClosed = false;
           });
         }
       } else {
-        setState(() {
-          _status = 'Face not detected';
-          _eyesOpened = false;
-          _eyesClosed = false;
-        });
+        // ID Card Detection Logic (OCR)
+        final recognizedText = await _textRecognizer?.processImage(inputImage);
+
+        final text = recognizedText?.text.trim() ?? '';
+        final upperText = text.toUpperCase();
+
+        final hasKeywords =
+            upperText.contains('NAME') ||
+            upperText.contains('ID') ||
+            upperText.contains('IDENTITY') ||
+            upperText.contains('PHILIPPINES') ||
+            upperText.contains('CARD') ||
+            upperText.contains('REPUBLIC') ||
+            upperText.contains('PLACE') ||
+            upperText.contains('DATE') ||
+            upperText.contains('ADDRESS') ||
+            upperText.contains('BLOOD') ||
+            upperText.contains('ISSUE') ||
+            upperText.contains('EXPIRY') ||
+            upperText.contains('VALID') ||
+            upperText.contains('SERIAL') ||
+            upperText.contains('SIGNATURE') ||
+            upperText.contains('NATIONAL') ||
+            upperText.contains('RESIDENT');
+
+        if (text.length > 25 && hasKeywords) {
+          // If we detect enough text, consider it an ID
+          if (!_isIdDetected) {
+            setState(() {
+              _isIdDetected = true;
+              _status = 'ID Detected! Tap to capture.';
+            });
+          }
+        } else {
+          if (_isIdDetected) {
+            setState(() {
+              _isIdDetected = false;
+              _status = 'Align ID card in the box';
+            });
+          }
+        }
       }
     } catch (e) {
-      print('Face detection error: $e');
+      print('Detection error: $e');
     } finally {
       _isBusy = false;
     }
@@ -141,6 +194,21 @@ class _SpacallCameraScreenState extends State<SpacallCameraScreen> {
 
   void _onCaptureRequested() async {
     if (_captureComplete) return;
+
+    // Reject capture for ID scans if not clearly detected
+    if (!widget.isFace && !_isIdDetected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please align your ID card correctly in the box until detected.',
+          ),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _captureComplete = true;
       _status = 'Capturing...';
@@ -148,9 +216,7 @@ class _SpacallCameraScreenState extends State<SpacallCameraScreen> {
 
     try {
       _isProcessing = true;
-      if (widget.isFace) {
-        await _controller?.stopImageStream();
-      }
+      await _controller?.stopImageStream();
 
       final XFile? file = await _controller?.takePicture();
 
@@ -164,9 +230,7 @@ class _SpacallCameraScreenState extends State<SpacallCameraScreen> {
       setState(() {
         _captureComplete = false;
         _isProcessing = false;
-        if (widget.isFace) {
-          _controller?.startImageStream(_processCameraImage);
-        }
+        _controller?.startImageStream(_processCameraImage);
       });
     }
   }
@@ -224,6 +288,7 @@ class _SpacallCameraScreenState extends State<SpacallCameraScreen> {
   void dispose() {
     _controller?.dispose();
     _faceDetector?.close();
+    _textRecognizer?.close();
     super.dispose();
   }
 
@@ -328,13 +393,14 @@ class _SpacallCameraScreenState extends State<SpacallCameraScreen> {
   }
 
   Widget _buildCircleOverlay() {
+    const goldColor = Color(0xFFD4AF37);
     return Container(
       width: 280,
       height: 280,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: _captureComplete ? Colors.green : Colors.blue,
+          color: _captureComplete ? Colors.green : goldColor,
           width: 4,
         ),
       ),
@@ -345,13 +411,16 @@ class _SpacallCameraScreenState extends State<SpacallCameraScreen> {
   }
 
   Widget _buildRectangleOverlay() {
+    const goldColor = Color(0xFFD4AF37);
     return Container(
       width: 320,
       height: 200,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: _captureComplete ? Colors.green : Colors.blue,
+          color: _captureComplete
+              ? Colors.green
+              : (_isIdDetected ? Colors.green : goldColor),
           width: 4,
         ),
       ),

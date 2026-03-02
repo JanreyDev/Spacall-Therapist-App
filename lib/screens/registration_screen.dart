@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'welcome_screen.dart';
+import 'login_screen.dart';
 import 'spacall_camera_screen.dart';
 import 'package:geolocator/geolocator.dart';
 import '../api_service.dart';
@@ -482,7 +483,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
       appBar: AppBar(
         backgroundColor: _bgPrimary,
         elevation: 0,
-        centerTitle: true,
+        centerTitle: false,
         leading: _currentStep > 0
             ? IconButton(
                 icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
@@ -492,14 +493,53 @@ class _RegistrationScreenState extends State<RegistrationScreen>
                 icon: const Icon(Icons.close_rounded),
                 onPressed: () => Navigator.pop(context),
               ),
-        title: const Text(
-          'THERAPIST REGISTRATION',
-          style: TextStyle(
-            color: _goldPrimary,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2.0,
-            fontSize: 14,
-          ),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'REGISTRATION',
+              style: TextStyle(
+                color: _goldPrimary,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2.0,
+                fontSize: 14,
+              ),
+            ),
+            GestureDetector(
+              onTap: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  (route) => false,
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: _goldPrimary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _goldPrimary.withOpacity(0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.login_rounded, size: 14, color: _goldPrimary),
+                    SizedBox(width: 6),
+                    Text(
+                      'LOGIN',
+                      style: TextStyle(
+                        color: _goldPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
         iconTheme: const IconThemeData(color: _goldPrimary),
       ),
@@ -679,7 +719,7 @@ class _RegistrationScreenState extends State<RegistrationScreen>
           ),
         ),
         const SizedBox(height: 8),
-        Text(
+        const Text(
           "Provide your professional credentials to join our curated marketplace.",
           style: TextStyle(color: _textSecondary, fontSize: 14, height: 1.5),
         ),

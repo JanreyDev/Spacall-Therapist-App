@@ -305,12 +305,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         debugPrint(
           '[DeepLink] 💳 Payment related link detected — Verifying...',
         );
-        // Payment redirect — verify pending transactions and refresh
+        // Payment redirect — verify pending transactions through backend
         _apiService
             .verifyPendingTransactions(widget.userData['token'])
             .then((result) {
               if (mounted) {
-                debugPrint('[DeepLink] Verification triggered from link');
+                debugPrint('[DeepLink] Verification request sent to backend');
+                // We let the real-time listeners or the subsequent global fetches
+                // handle the UI update to avoid "race condition" double-updates
               }
             })
             .catchError((e) {
@@ -318,6 +320,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             })
             .whenComplete(() {
               if (mounted) {
+                // Single source of truth fetch
                 _fetchProfile();
                 _fetchDashboardStats();
                 _fetchTransactions();
@@ -2164,15 +2167,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       } else {
         // Fallback or immediate success
         Navigator.of(context).pop(); // Close deposit dialog
-        setState(() {
-          if (response['balance'] != null) {
-            _walletBalance =
-                double.tryParse(response['balance'].toString()) ??
-                _walletBalance;
-          } else {
-            _walletBalance += amount;
-          }
-        });
+        // We rely on _fetchProfile and Real-time listeners to update _walletBalance
+        // to avoid race conditions/duplicates with Pusher notifications.
+        _fetchProfile();
 
         // Show success
         if (!mounted) return;
@@ -2181,7 +2178,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           builder: (context) => LuxurySuccessModal(
             title: 'DEPOSIT SUCCESSFUL',
             message:
-                'You have successfully deposited $_currency${NumberFormat('#,##0.00', 'en_US').format(amount)} into your wallet.',
+                'You have successfully initiated a deposit. Your balance will update shortly.',
             buttonText: 'OKAY',
             onConfirm: () => Navigator.of(context).pop(),
           ),

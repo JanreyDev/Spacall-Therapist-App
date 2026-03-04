@@ -34,16 +34,38 @@ void main() async {
   // Check for initial deep link to handle redirects (like "return merchant")
   final appLinks = AppLinks();
   final initialUri = await appLinks.getInitialLink();
+
+  // Accept any link that has "payment" in it OR has our new scheme
   final isDeepLinkLaunch =
-      initialUri != null && initialUri.toString().contains('payment');
+      initialUri != null &&
+      (initialUri.toString().contains('payment') ||
+          initialUri.scheme == 'spacalltherapist');
 
   if (isDeepLinkLaunch) {
     debugPrint('[MAIN] Deep link launch detected: $initialUri');
   }
 
-  // Log incoming links at the root level for debugging
+  // Global navigator key for out-of-context navigation (deep links)
+  final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+  // Robust listener to handle deep links at ANY time (Warm/Cold/Resumed)
   appLinks.uriLinkStream.listen((uri) {
-    debugPrint('[ROOT DEEP LINK] Received: $uri');
+    debugPrint('[ROOT DEEP LINK] Event: $uri');
+    final isPaymentLink =
+        uri.toString().contains('payment') || uri.scheme == 'spacalltherapist';
+
+    if (isPaymentLink && userData != null) {
+      debugPrint('[ROOT DEEP LINK] Fast-tracking to Home Dashboard...');
+      // Ensure we jump to Home regardless of whether we are on Splash or Onboarding
+      Future.delayed(const Duration(milliseconds: 100), () {
+        navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (context) => WelcomeScreen(userData: userData!),
+          ),
+          (route) => false,
+        );
+      });
+    }
   });
 
   runApp(
@@ -56,6 +78,7 @@ void main() async {
       child: MyApp(
         initialUserData: userData,
         isDeepLinkLaunch: isDeepLinkLaunch,
+        navigatorKey: navigatorKey,
       ),
     ),
   );
@@ -64,13 +87,21 @@ void main() async {
 class MyApp extends StatelessWidget {
   final Map<String, dynamic>? initialUserData;
   final bool isDeepLinkLaunch;
-  const MyApp({super.key, this.initialUserData, this.isDeepLinkLaunch = false});
+  final GlobalKey<NavigatorState> navigatorKey;
+
+  const MyApp({
+    super.key,
+    this.initialUserData,
+    this.isDeepLinkLaunch = false,
+    required this.navigatorKey,
+  });
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Spacall Therapist',
       debugShowCheckedModeBanner: false,
       theme: themeProvider.currentTheme,
@@ -78,6 +109,7 @@ class MyApp extends StatelessWidget {
         debugPrint(
           '[NAVIGATION] onGenerateRoute Attempted for: ${settings.name}',
         );
+        // If we are redirecting to home or root, ensure we honor the deep link state
         return MaterialPageRoute(
           builder: (context) => (initialUserData != null && isDeepLinkLaunch)
               ? WelcomeScreen(userData: initialUserData!)

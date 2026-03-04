@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
-import 'welcome_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final Map<String, dynamic>? initialUserData;
@@ -97,23 +96,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         curve: Curves.easeInOut,
                       );
                     } else {
-                      if (widget.initialUserData != null) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => WelcomeScreen(
-                              userData: widget.initialUserData!,
-                            ),
-                          ),
-                        );
-                      } else {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const LoginScreen(),
-                          ),
-                        );
-                      }
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const LoginScreen(),
+                        ),
+                      );
                     }
                   },
                 ),

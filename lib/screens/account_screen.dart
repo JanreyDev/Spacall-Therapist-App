@@ -190,6 +190,175 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
+  void _showAboutSpacallDialog(BuildContext context) {
+    final goldColor = const Color(0xFFEBC14F);
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Logo/Icon
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [goldColor, goldColor.withOpacity(0.2)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: const Icon(Icons.spa, size: 48, color: Colors.white),
+                ),
+                const SizedBox(height: 20),
+
+                // App Name
+                Text(
+                  "SPACALL",
+                  style: TextStyle(
+                    color: goldColor,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Tagline
+                Text(
+                  "Professional Wellness Partner",
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Description
+                Text(
+                  "Join the elite network of premium wellness providers. Spacall empowers professional therapists and stores to reach high-value clients, manage bookings efficiently, and grow their business in a luxury environment.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Features
+                _buildFeatureRow(
+                  Icons.bolt,
+                  "Instant Requests",
+                  "Receive real-time booking notifications",
+                ),
+                const SizedBox(height: 12),
+                _buildFeatureRow(
+                  Icons.account_balance_wallet,
+                  "Wallet Control",
+                  "Transparent earnings and fast withdrawals",
+                ),
+                const SizedBox(height: 12),
+                _buildFeatureRow(
+                  Icons.trending_up,
+                  "Partner Growth",
+                  "Level up your tier for higher visibility",
+                ),
+                const SizedBox(height: 12),
+                _buildFeatureRow(
+                  Icons.support_agent,
+                  "Partner Support",
+                  "Dedicated assistance for our providers",
+                ),
+                const SizedBox(height: 24),
+
+                // Version
+                Text(
+                  "Version 1.0.0",
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.3),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Close Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: goldColor,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      "CLOSE",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureRow(IconData icon, String title, String description) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEBC14F).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 20, color: const Color(0xFFEBC14F)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -653,8 +822,9 @@ class _AccountScreenState extends State<AccountScreen> {
                 _buildSettingItem(
                   Icons.info_outline,
                   "About Spacall",
-                  "Version 1.0.0",
+                  "Learn more about our luxury wellness experience",
                   themeProvider,
+                  onTap: () => _showAboutSpacallDialog(context),
                 ),
               ], themeProvider),
 

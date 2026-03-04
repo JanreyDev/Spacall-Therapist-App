@@ -8,7 +8,8 @@ import 'welcome_screen.dart';
 import 'onboarding_screen.dart';
 
 class AnimatedLogoScreen extends StatefulWidget {
-  const AnimatedLogoScreen({super.key});
+  final Map<String, dynamic>? initialUserData;
+  const AnimatedLogoScreen({super.key, this.initialUserData});
 
   @override
   State<AnimatedLogoScreen> createState() => _AnimatedLogoScreenState();
@@ -91,33 +92,18 @@ class _AnimatedLogoScreenState extends State<AnimatedLogoScreen>
   Future<void> _proceedToNextScreen() async {
     if (!mounted) return;
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userDataStr = prefs.getString('user_data');
-
-      if (userDataStr != null && userDataStr.isNotEmpty) {
-        final userData = jsonDecode(userDataStr);
-        if (userData != null && userData['token'] != null) {
-          debugPrint(
-            '[AUTO-LOGIN] User session found. Redirecting to WelcomeScreen.',
-          );
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (context) => WelcomeScreen(userData: userData),
-            ),
-          );
-          return;
-        }
-      }
-    } catch (e) {
-      debugPrint('[AUTO-LOGIN] Error parsing user data: $e');
+    if (widget.initialUserData != null) {
+      debugPrint(
+        '[AUTO-LOGIN] User session found. Passing through to Onboarding for premium sequence.',
+      );
     }
 
-    debugPrint(
-      '[AUTO-LOGIN] No session found. Redirecting to OnboardingScreen.',
-    );
+    debugPrint('[Splash] Redirecting to OnboardingScreen.');
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+      MaterialPageRoute(
+        builder: (context) =>
+            OnboardingScreen(initialUserData: widget.initialUserData),
+      ),
     );
   }
 

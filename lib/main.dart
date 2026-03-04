@@ -31,8 +31,18 @@ void main() async {
     debugPrint('[CRASH] FlutterError: ${details.exception}');
   };
 
+  // Check for initial deep link to handle redirects (like "return merchant")
+  final appLinks = AppLinks();
+  final initialUri = await appLinks.getInitialLink();
+  final isDeepLinkLaunch =
+      initialUri != null && initialUri.toString().contains('payment');
+
+  if (isDeepLinkLaunch) {
+    debugPrint('[MAIN] Deep link launch detected: $initialUri');
+  }
+
   // Log incoming links at the root level for debugging
-  AppLinks().uriLinkStream.listen((uri) {
+  appLinks.uriLinkStream.listen((uri) {
     debugPrint('[ROOT DEEP LINK] Received: $uri');
   });
 
@@ -43,14 +53,18 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => SupportChatProvider()),
       ],
-      child: MyApp(initialUserData: userData),
+      child: MyApp(
+        initialUserData: userData,
+        isDeepLinkLaunch: isDeepLinkLaunch,
+      ),
     ),
   );
 }
 
 class MyApp extends StatelessWidget {
   final Map<String, dynamic>? initialUserData;
-  const MyApp({super.key, this.initialUserData});
+  final bool isDeepLinkLaunch;
+  const MyApp({super.key, this.initialUserData, this.isDeepLinkLaunch = false});
 
   @override
   Widget build(BuildContext context) {
@@ -65,14 +79,14 @@ class MyApp extends StatelessWidget {
           '[NAVIGATION] onGenerateRoute Attempted for: ${settings.name}',
         );
         return MaterialPageRoute(
-          builder: (context) => initialUserData != null
+          builder: (context) => (initialUserData != null && isDeepLinkLaunch)
               ? WelcomeScreen(userData: initialUserData!)
-              : const AnimatedLogoScreen(),
+              : AnimatedLogoScreen(initialUserData: initialUserData),
         );
       },
-      home: initialUserData != null
+      home: (initialUserData != null && isDeepLinkLaunch)
           ? WelcomeScreen(userData: initialUserData!)
-          : const AnimatedLogoScreen(),
+          : AnimatedLogoScreen(initialUserData: initialUserData),
     );
   }
 }

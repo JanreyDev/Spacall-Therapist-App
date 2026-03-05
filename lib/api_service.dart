@@ -855,6 +855,7 @@ class ApiService {
     required String token,
     required int bookingId,
     required String status,
+    String? travelMode,
   }) async {
     try {
       final response = await http.patch(
@@ -864,7 +865,10 @@ class ApiService {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'status': status}),
+        body: jsonEncode({
+          'status': status,
+          if (travelMode != null) 'travel_mode': travelMode,
+        }),
       );
 
       if (response.statusCode == 200) {

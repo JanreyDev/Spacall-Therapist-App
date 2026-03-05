@@ -622,6 +622,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
         token: widget.token,
         bookingId: widget.booking['id'],
         status: status,
+        travelMode: status == 'en_route' ? _selectedTravelMode : null,
       );
 
       _currentStatus = status; // Update local status immediately

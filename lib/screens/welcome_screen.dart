@@ -23,6 +23,7 @@ import 'login_screen.dart';
 import 'store_staff_screen.dart';
 import 'transaction_history_screen.dart';
 import '../widgets/luxury_success_modal.dart';
+import '../widgets/luxury_error_modal.dart';
 import '../widgets/luxury_waiver_dialog.dart';
 import 'withdraw_screen.dart';
 
@@ -2448,9 +2449,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       Navigator.pop(context);
                       _handleDeposit(amount, 'Paymongo');
                     } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Minimum deposit is ₱100'),
+                      showDialog(
+                        context: context,
+                        builder: (context) => LuxuryErrorModal(
+                          title: 'MINIMUM TOP-UP',
+                          message:
+                              'The minimum amount to add funds is ₱100. Please enter at least ₱100 to continue.',
+                          buttonText: 'OKAY',
+                          onConfirm: () => Navigator.pop(context),
                         ),
                       );
                     }

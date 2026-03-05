@@ -1222,17 +1222,15 @@ class ApiService {
   }) async {
     String apiMode = mode;
     List<String> avoids = [];
+    final bool isMotorcycleMode = mode == 'motorcycle';
 
     if (avoidTolls) avoids.add('tolls');
     if (avoidHighways) avoids.add('highways');
     if (avoidFerries) avoids.add('ferries');
 
-    if (mode == 'bicycling' || mode == 'two_wheeler') {
-      apiMode = 'driving'; // Fallback to driving to ensure a route is found
-      if (!avoidTolls && mode == 'two_wheeler')
-        avoids.add(
-          'tolls',
-        ); // Motorcycles often avoid tolls by default unless explicitly disabled, but let's just add it if they didn't specify
+    if (isMotorcycleMode || mode == 'two_wheeler') {
+      apiMode = 'driving';
+      if (!avoidTolls) avoids.add('tolls');
     }
 
     String avoidParam = avoids.isNotEmpty ? '&avoid=${avoids.join('|')}' : '';
@@ -1257,7 +1255,16 @@ class ApiService {
 
           final List<dynamic> steps = leg['steps'];
           final String distance = leg['distance']['text'];
-          final String duration = leg['duration']['text'];
+          final int rawDurationSeconds =
+              int.tryParse(leg['duration']?['value']?.toString() ?? '0') ?? 0;
+          final int effectiveDurationSeconds = isMotorcycleMode
+              ? (rawDurationSeconds * 0.75).round()
+              : rawDurationSeconds;
+          final int effectiveDurationMinutes =
+              (effectiveDurationSeconds / 60).ceil();
+          final String duration = effectiveDurationMinutes >= 60
+              ? '${effectiveDurationMinutes ~/ 60} hr ${effectiveDurationMinutes % 60} min'
+              : '$effectiveDurationMinutes min';
 
           debugPrint('Route fetched successfully with ${points.length} points');
 
@@ -1266,6 +1273,7 @@ class ApiService {
             'steps': steps,
             'distance': distance,
             'duration': duration,
+            'duration_minutes': effectiveDurationMinutes,
           };
         } else {
           debugPrint('Directions API returned status: ${data['status']}');

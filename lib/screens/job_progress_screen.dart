@@ -53,6 +53,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
   String _totalDistance = '';
   String _totalDuration = '';
   String _selectedTravelMode = 'driving';
+  final Map<String, String> _modeDurations = {};
   bool _avoidTolls = false;
   bool _avoidHighways = false;
   bool _avoidFerries = false;
@@ -988,6 +989,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
               : [];
           _totalDistance = details['distance'] ?? '';
           _totalDuration = details['duration'] ?? '';
+          _modeDurations[_selectedTravelMode] = _totalDuration;
 
           if (points.isNotEmpty) {
             _polylines = {
@@ -2339,7 +2341,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                 Text(
                   _selectedTravelMode == 'driving'
                       ? 'Car'
-                      : _selectedTravelMode == 'bicycling'
+                      : _selectedTravelMode == 'motorcycle'
                       ? 'Two-wheeler'
                       : 'Walking',
                   style: const TextStyle(
@@ -2398,7 +2400,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
               children: [
                 _buildGoogleMapsModeOption(Icons.directions_car, 'driving'),
                 const SizedBox(width: 24),
-                _buildGoogleMapsModeOption(Icons.two_wheeler, 'bicycling'),
+                _buildGoogleMapsModeOption(Icons.two_wheeler, 'motorcycle'),
                 const SizedBox(width: 24),
                 _buildGoogleMapsModeOption(Icons.directions_walk, 'walking'),
               ],
@@ -2422,7 +2424,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                         style: TextStyle(
                           color:
                               _selectedTravelMode == 'driving' ||
-                                  _selectedTravelMode == 'bicycling'
+                                  _selectedTravelMode == 'motorcycle'
                               ? const Color(
                                   0xFFE5C07B,
                                 ) // Gold-ish for driving/biking like in maps
@@ -2519,9 +2521,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                     onChanged: (val) {
                       setState(() => _avoidTolls = val);
                       setModalState(() => _avoidTolls = val);
-                      _onTravelModeChanged(
-                        _selectedTravelMode,
-                      ); // triggers refresh
+                      _fetchRoute();
                     },
                   ),
                   SwitchListTile(
@@ -2534,9 +2534,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                     onChanged: (val) {
                       setState(() => _avoidHighways = val);
                       setModalState(() => _avoidHighways = val);
-                      _onTravelModeChanged(
-                        _selectedTravelMode,
-                      ); // triggers refresh
+                      _fetchRoute();
                     },
                   ),
                   SwitchListTile(
@@ -2549,9 +2547,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
                     onChanged: (val) {
                       setState(() => _avoidFerries = val);
                       setModalState(() => _avoidFerries = val);
-                      _onTravelModeChanged(
-                        _selectedTravelMode,
-                      ); // triggers refresh
+                      _fetchRoute();
                     },
                   ),
                   const SizedBox(height: 16),
@@ -2566,6 +2562,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
 
   Widget _buildGoogleMapsModeOption(IconData icon, String mode) {
     final isSelected = _selectedTravelMode == mode;
+    final String modeEta = _modeDurations[mode] ?? '';
     return GestureDetector(
       onTap: () => _onTravelModeChanged(mode),
       child: Column(
@@ -2581,7 +2578,7 @@ class _JobProgressScreenState extends State<JobProgressScreen> {
               const SizedBox(width: 8),
               if (_totalDuration.isNotEmpty)
                 Text(
-                  _totalDuration, // In a real app we'd fetch all 3 ETAs at once, but for now we show current
+                  isSelected ? _totalDuration : modeEta,
                   style: TextStyle(
                     color: isSelected
                         ? const Color(0xFF81D4FA)

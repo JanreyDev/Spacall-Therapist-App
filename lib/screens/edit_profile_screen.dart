@@ -609,8 +609,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   'UPDATE PROFILE',
                   style: GoogleFonts.outfit(
                     color: Colors.black,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
                     letterSpacing: 2,
                   ),
                 ),

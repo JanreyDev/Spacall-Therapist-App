@@ -24,6 +24,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
   List<dynamic> _historyBookings = [];
   bool _isLoading = true;
   Timer? _refreshTimer;
+  int _historyCurrentPage = 1;
+  static const int _historyPageSize = 6;
 
   @override
   void initState() {
@@ -53,6 +55,13 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
         setState(() {
           _currentBookings = data['current'] ?? [];
           _historyBookings = data['history'] ?? [];
+          final totalHistoryPages = (_historyBookings.length / _historyPageSize)
+              .ceil();
+          if (totalHistoryPages <= 1) {
+            _historyCurrentPage = 1;
+          } else if (_historyCurrentPage > totalHistoryPages) {
+            _historyCurrentPage = totalHistoryPages;
+          }
           _isLoading = false;
         });
       }
@@ -104,6 +113,15 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       );
     }
 
+    final historyStart = (_historyCurrentPage - 1) * _historyPageSize;
+    final historyEnd =
+        (historyStart + _historyPageSize) > _historyBookings.length
+        ? _historyBookings.length
+        : (historyStart + _historyPageSize);
+    final pagedHistoryBookings = _historyBookings.isEmpty
+        ? <dynamic>[]
+        : _historyBookings.sublist(historyStart, historyEnd);
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
       children: [
@@ -128,8 +146,86 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
             ),
           )
         else
-          ..._historyBookings.map((b) => _buildBookingCard(b, false)),
+          ...pagedHistoryBookings.map((b) => _buildBookingCard(b, false)),
+        if (_historyBookings.length > _historyPageSize)
+          _buildPaginationControls(goldColor),
       ],
+    );
+  }
+
+  Widget _buildPaginationControls(Color goldColor) {
+    final totalPages = (_historyBookings.length / _historyPageSize).ceil();
+    if (totalPages <= 1) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _buildPageButton(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onTap: _historyCurrentPage > 1
+                ? () => setState(() => _historyCurrentPage--)
+                : null,
+            goldColor: goldColor,
+          ),
+          const SizedBox(width: 24),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: goldColor.withOpacity(0.3)),
+            ),
+            child: Text(
+              "PAGE $_historyCurrentPage OF $totalPages",
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+              ),
+            ),
+          ),
+          const SizedBox(width: 24),
+          _buildPageButton(
+            icon: Icons.arrow_forward_ios_rounded,
+            onTap: _historyCurrentPage < totalPages
+                ? () => setState(() => _historyCurrentPage++)
+                : null,
+            goldColor: goldColor,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPageButton({
+    required IconData icon,
+    VoidCallback? onTap,
+    required Color goldColor,
+  }) {
+    final isDisabled = onTap == null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDisabled
+              ? Colors.white.withOpacity(0.02)
+              : goldColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDisabled ? Colors.transparent : goldColor.withOpacity(0.3),
+          ),
+        ),
+        child: Icon(
+          icon,
+          color: isDisabled ? Colors.white.withOpacity(0.2) : goldColor,
+          size: 18,
+        ),
+      ),
     );
   }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_service.dart';
@@ -6,12 +7,14 @@ import 'job_progress_screen.dart';
 
 class ActiveRequestsScreen extends StatefulWidget {
   final String token;
+  final Map<String, dynamic> userData;
   final bool isTab;
   final Function(int)? onTabSwitch;
 
   const ActiveRequestsScreen({
     super.key,
     required this.token,
+    required this.userData,
     this.isTab = false,
     this.onTabSwitch,
   });
@@ -24,11 +27,54 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
   final _apiService = ApiService();
   List<dynamic> _requests = [];
   bool _isLoading = true;
+  StreamSubscription? _bookingSubscription;
 
   @override
   void initState() {
     super.initState();
     _fetchRequests();
+    _initListeners();
+  }
+
+  void _initListeners() {
+    var provider = widget.userData['provider'];
+    if (provider == null && widget.userData['user'] != null) {
+      provider = widget.userData['user']['provider'];
+    }
+    if (provider == null || provider['id'] == null) return;
+
+    final providerId = provider['id'];
+
+    _bookingSubscription = _apiService.listenForBookings(providerId, (booking) {
+      if (!mounted) return;
+      debugPrint(
+        '[ActiveRequests] Real-time booking received: ${booking['id']} status: ${booking['status']}',
+      );
+
+      final bookingId = booking['id'];
+      final status = booking['status'];
+
+      setState(() {
+        if (status == 'cancelled') {
+          _requests.removeWhere(
+            (r) => r['id'].toString() == bookingId.toString(),
+          );
+        } else if (status == 'pending' || status == 'awaiting_assignment') {
+          // Add if not already in list
+          if (!_requests.any(
+            (r) => r['id'].toString() == bookingId.toString(),
+          )) {
+            _requests.insert(0, booking);
+          }
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _bookingSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchRequests() async {

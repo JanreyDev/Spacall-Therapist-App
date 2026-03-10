@@ -78,6 +78,7 @@ class ConsolidatedRequestsScreen extends StatelessWidget {
             ),
             ActiveRequestsScreen(
               token: token,
+              userData: userData,
               isTab: true,
               onTabSwitch: onTabSwitch,
             ),

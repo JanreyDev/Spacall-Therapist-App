@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_service.dart';
@@ -24,11 +25,34 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
   final _apiService = ApiService();
   List<dynamic> _bookings = [];
   bool _isLoading = true;
+  StreamSubscription? _claimingSubscription;
 
   @override
   void initState() {
     super.initState();
     _fetchBookings();
+    _initListeners();
+  }
+
+  void _initListeners() {
+    _claimingSubscription = _apiService.listenForBookingClaimed((data) {
+      if (!mounted) return;
+      debugPrint('[NearbyBookings] Real-time claim event: $data');
+      final bookingId = data['booking_id'];
+      if (bookingId != null) {
+        setState(() {
+          _bookings.removeWhere(
+            (b) => b['id'].toString() == bookingId.toString(),
+          );
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _claimingSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchBookings() async {

@@ -158,20 +158,47 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           providerId,
           onConnected: () {
             // Runs INSIDE onConnectionEstablished — fully connected guaranteed.
-            // This fixes a release-mode timing issue where subscribe() was called
-            // before dart_pusher_channels internals were ready (AOT runs much faster).
             debugPrint(
               '[WelcomeScreen] onConnected — subscribing channels for provider $providerId',
             );
+
             _apiService.listenForBookings(providerId, (booking) {
               if (!mounted) return;
               debugPrint(
-                '[WelcomeScreen] 🔔 REAL-TIME BookingRequested received!',
+                '[WelcomeScreen] 🔔 REAL-TIME Booking Update received: $booking',
               );
 
-              final bookingId = booking is Map<String, dynamic>
-                  ? booking['id']
-                  : null;
+              final bookingId = booking['id'];
+              final status = booking['status'];
+
+              if (status == 'cancelled') {
+                debugPrint(
+                  '[WelcomeScreen] Received CANCELLED status for booking $bookingId. Active dialog: $_activeBookingDialogId',
+                );
+                if (bookingId != null &&
+                    bookingId.toString() ==
+                        _activeBookingDialogId?.toString()) {
+                  debugPrint(
+                    '[WelcomeScreen] 🎯 MATCH! Closing dialog for cancelled booking.',
+                  );
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context); // Close the active dialog
+                    _activeBookingDialogId = null;
+                    showDialog(
+                      context: context,
+                      builder: (modalContext) => LuxurySuccessModal(
+                        isError: true,
+                        title: 'BOOKING CANCELLED',
+                        message: "The client has cancelled this request.",
+                        onConfirm: () => Navigator.pop(modalContext),
+                      ),
+                    );
+                  }
+                }
+                _checkActiveRequests(suppressNotification: true);
+                return;
+              }
+
               if (bookingId != null) {
                 if (_notifiedBookingIds.contains(bookingId)) {
                   debugPrint(
@@ -202,7 +229,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 debugPrint(
                   '[WelcomeScreen] 🔔 REAL-TIME User Notification received: $notification',
                 );
-                // Refresh profile and stats to update wallet balance immediately
                 _fetchProfile();
                 _fetchDashboardStats();
                 _fetchTransactions();
@@ -217,7 +243,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 _fetchDashboardStats();
                 _fetchTransactions();
 
-                // IMMEDIATELY update the local state for online toggle synchronization
                 final raw = event['newBalance']?.toString() ?? '';
                 final balance = double.tryParse(
                   raw.replaceAll(RegExp(r'[^0-9.]'), ''),
@@ -245,23 +270,41 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             _apiService.listenForBookingClaimed((claimed) {
               if (!mounted) return;
               debugPrint(
-                '[WelcomeScreen] ⚡ REAL-TIME Booking Claimed: $claimed',
+                '[WelcomeScreen] ⚡ REAL-TIME Booking Claimed/Cancelled: $claimed',
               );
 
               final claimedBookingId = claimed['booking_id'];
+              final status = claimed['status'];
+
+              if (claimedBookingId != null) {
+                debugPrint(
+                  '[WelcomeScreen] Claimed ID: $claimedBookingId, Active Dialog ID: $_activeBookingDialogId',
+                );
+              }
+
               if (claimedBookingId != null &&
-                  claimedBookingId == _activeBookingDialogId) {
+                  claimedBookingId.toString() ==
+                      _activeBookingDialogId?.toString()) {
+                debugPrint(
+                  '[WelcomeScreen] 🎯 MATCH! Closing dialog for claimed/cancelled booking.',
+                );
                 // If the dialog for this booking is open, close it
                 if (Navigator.canPop(context)) {
                   Navigator.pop(context);
+                  _activeBookingDialogId = null;
+
+                  final isCancelled = status == 'cancelled';
                   showDialog(
                     context: context,
                     builder: (modalContext) => LuxurySuccessModal(
                       isError: true,
-                      title: 'BOOKING CLAIMED',
-                      message:
-                          "This session has already been accepted by another therapist. Don't worry, more opportunities are coming!",
-                      buttonText: 'SEE OTHERS',
+                      title: isCancelled
+                          ? 'BOOKING CANCELLED'
+                          : 'BOOKING CLAIMED',
+                      message: isCancelled
+                          ? "The client has cancelled this session."
+                          : "This session has already been accepted by another therapist. Don't worry, more opportunities are coming!",
+                      buttonText: isCancelled ? 'OK' : 'SEE OTHERS',
                       onConfirm: () => Navigator.pop(modalContext),
                     ),
                   );
@@ -1003,6 +1046,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () {
+                            if (mounted) {
+                              debugPrint(
+                                '[WelcomeScreen] Opening details for $_activeBookingDialogId',
+                              );
+                            }
                             Navigator.pop(context);
                             _showBookingDetails(booking);
                           },
@@ -1026,7 +1074,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       const SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () {
+                            debugPrint(
+                              '[WelcomeScreen] Declined notification for $_activeBookingDialogId',
+                            );
+                            _activeBookingDialogId = null;
+                            Navigator.pop(context);
+                          },
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: Colors.redAccent),
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1073,6 +1127,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     ),
                     child: ElevatedButton(
                       onPressed: () {
+                        _activeBookingDialogId = null;
                         Navigator.pop(context);
                         _acceptBooking(booking['id']);
                       },
@@ -1100,8 +1155,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           ],
         ),
       ),
-    ).then((_) {
-      if (_activeBookingDialogId == bookingId) {
+    ).whenComplete(() {
+      if (mounted && bookingId != null && _activeBookingDialogId == bookingId) {
+        debugPrint('[WelcomeScreen] Notification dialog closed for $bookingId');
         _activeBookingDialogId = null;
       }
     });
@@ -1236,6 +1292,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   void _showBookingDetails(Map<String, dynamic> booking) {
+    final bookingId = booking['id'];
+    if (bookingId != null) {
+      _activeBookingDialogId = bookingId;
+      debugPrint(
+        '[WelcomeScreen] _showBookingDetails setting _activeBookingDialogId to $bookingId',
+      );
+    }
+
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final goldColor = themeProvider.goldColor;
     final customer = booking['customer'];
@@ -1458,7 +1522,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           ],
         ),
       ),
-    );
+    ).whenComplete(() {
+      if (mounted && _activeBookingDialogId == bookingId) {
+        debugPrint(
+          '[WelcomeScreen] Details bottom sheet closed for $bookingId',
+        );
+        _activeBookingDialogId = null;
+      }
+    });
   }
 
   Widget _buildDetailSection(String label, String value, IconData icon) {

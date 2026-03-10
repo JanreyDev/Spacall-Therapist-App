@@ -267,32 +267,37 @@ class ApiService {
     onConnected?.call();
   }
 
-  void listenForBookings(int providerId, Function(dynamic) onBookingReceived) {
-    _pusher.privateChannel('therapist.$providerId', 'BookingRequested').listen((
-      data,
-    ) {
-      debugPrint('[Pusher] BookingRequested: $data');
-      onBookingReceived(data['booking'] ?? data);
-    });
+  StreamSubscription listenForBookings(
+    int providerId,
+    Function(dynamic) onBookingReceived,
+  ) {
+    return _pusher
+        .privateChannel('therapist.$providerId', 'BookingRequested')
+        .listen((data) {
+          debugPrint('[Pusher] BookingRequested: $data');
+          onBookingReceived(data['booking'] ?? data);
+        });
   }
 
-  void listenForBookingClaimed(Function(dynamic) onBookingClaimed) {
-    _pusher.publicChannel('bookings', 'BookingClaimed').listen((data) {
+  StreamSubscription listenForBookingClaimed(
+    Function(dynamic) onBookingClaimed,
+  ) {
+    return _pusher.publicChannel('bookings', 'BookingClaimed').listen((data) {
       debugPrint('[Pusher] BookingClaimed: $data');
       onBookingClaimed(data);
     });
   }
 
-  void listenForBookingUpdates(
+  StreamSubscription listenForBookingUpdates(
     int bookingId,
     Function(dynamic) onBookingUpdated,
   ) {
-    _pusher.privateChannel('booking.$bookingId', 'BookingStatusUpdated').listen(
-      (data) {
-        debugPrint('[Pusher] BookingStatusUpdated: $data');
-        onBookingUpdated(data['booking'] ?? data);
-      },
-    );
+    return _pusher
+        .privateChannel('booking.$bookingId', 'BookingStatusUpdated')
+        .listen((data) {
+          debugPrint('[Pusher] BookingStatusUpdated: $data');
+          onBookingUpdated(data['booking'] ?? data);
+        });
   }
 
   void listenForBookingMessages(
@@ -1264,8 +1269,8 @@ class ApiService {
           final int effectiveDurationSeconds = isMotorcycleMode
               ? (rawDurationSeconds * 0.75).round()
               : rawDurationSeconds;
-          final int effectiveDurationMinutes =
-              (effectiveDurationSeconds / 60).ceil();
+          final int effectiveDurationMinutes = (effectiveDurationSeconds / 60)
+              .ceil();
           final String duration = effectiveDurationMinutes >= 60
               ? '${effectiveDurationMinutes ~/ 60} hr ${effectiveDurationMinutes % 60} min'
               : '$effectiveDurationMinutes min';

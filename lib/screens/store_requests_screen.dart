@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_service.dart';
 import '../widgets/luxury_success_modal.dart';
+import '../widgets/booking_details_modal.dart';
 import 'job_progress_screen.dart';
 
 class StoreRequestsScreen extends StatefulWidget {
@@ -29,6 +31,29 @@ class _StoreRequestsScreenState extends State<StoreRequestsScreen> {
   void initState() {
     super.initState();
     _fetchRequests();
+    _initListeners();
+  }
+
+  StreamSubscription? _statusSubscription;
+
+  void _initListeners() {
+    _statusSubscription = _apiService.listenForBookingClaimed((data) {
+      if (!mounted) return;
+      final bookingId = data['booking_id'];
+      if (bookingId != null) {
+        setState(() {
+          _requests.removeWhere(
+            (r) => r['id'].toString() == bookingId.toString(),
+          );
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _statusSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchRequests() async {
@@ -311,6 +336,29 @@ class _StoreRequestsScreenState extends State<StoreRequestsScreen> {
                         ),
                       ],
                       const SizedBox(height: 20),
+                      const SizedBox(height: 20),
+                      // View Details Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) =>
+                                  BookingDetailsModal(booking: booking),
+                            );
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFFD4AF37),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                          child: const Text(
+                            'View Details',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       Row(
                         children: [
                           Expanded(

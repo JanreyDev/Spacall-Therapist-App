@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_service.dart';
 import '../widgets/luxury_success_modal.dart';
+import '../widgets/booking_details_modal.dart';
 import 'job_progress_screen.dart';
 
 class ActiveRequestsScreen extends StatefulWidget {
@@ -337,6 +338,29 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
+                      const SizedBox(height: 20),
+                      // View Details Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) =>
+                                  BookingDetailsModal(booking: booking),
+                            );
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFFD4AF37),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                          child: const Text(
+                            'View Details',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       Row(
                         children: [
                           Expanded(

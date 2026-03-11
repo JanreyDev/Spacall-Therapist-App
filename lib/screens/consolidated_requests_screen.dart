@@ -23,8 +23,12 @@ class ConsolidatedRequestsScreen extends StatelessWidget {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final goldColor = themeProvider.goldColor;
 
-    final bool isStore = userData['user']?['customer_tier'] == 'store';
-    final int tabCount = isStore ? 3 : 2;
+    final tier = userData['user']?['customer_tier'] ?? 'classic';
+    final bool isStore = tier == 'store';
+    final bool isClassic = tier == 'classic';
+
+    // Determine tab count: 1 for classic (nearby only), 3 for store, 2 for others
+    final int tabCount = isClassic ? 1 : (isStore ? 3 : 2);
 
     return DefaultTabController(
       length: tabCount,
@@ -41,47 +45,54 @@ class ConsolidatedRequestsScreen extends StatelessWidget {
               fontSize: 18,
             ),
           ),
-          bottom: TabBar(
-            indicatorColor: goldColor,
-            labelColor: goldColor,
-            unselectedLabelColor: Colors.white54,
-            indicatorWeight: 3,
-            tabs: [
-              const Tab(
-                child: Text(
-                  'NEARBY',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              const Tab(
-                child: Text(
-                  'DIRECT',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              if (isStore)
-                const Tab(
-                  child: Text(
-                    'STORE',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-            ],
-          ),
+          bottom: tabCount > 1
+              ? TabBar(
+                  indicatorColor: goldColor,
+                  labelColor: goldColor,
+                  unselectedLabelColor: Colors.white54,
+                  indicatorWeight: 3,
+                  tabs: [
+                    const Tab(
+                      child: Text(
+                        'NEARBY',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    if (!isClassic)
+                      const Tab(
+                        child: Text(
+                          'DIRECT',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    if (isStore)
+                      const Tab(
+                        child: Text(
+                          'STORE',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                  ],
+                )
+              : null,
         ),
         body: TabBarView(
           children: [
             NearbyBookingsScreen(
               token: token,
-              isTab: true,
-              onTabSwitch: onTabSwitch,
-            ),
-            ActiveRequestsScreen(
-              token: token,
               userData: userData,
               isTab: true,
-              onTabSwitch: onTabSwitch,
+              onTabSwitch: (index) {
+                DefaultTabController.of(context).animateTo(index);
+              },
             ),
+            if (!isClassic)
+              ActiveRequestsScreen(
+                token: token,
+                userData: userData,
+                isTab: true,
+                onTabSwitch: onTabSwitch,
+              ),
             if (isStore)
               StoreRequestsScreen(
                 token: token,

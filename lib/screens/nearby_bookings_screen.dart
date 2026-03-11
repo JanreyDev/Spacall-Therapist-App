@@ -3,16 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../api_service.dart';
 import '../widgets/luxury_success_modal.dart';
+import '../widgets/booking_details_modal.dart';
 import 'job_progress_screen.dart';
 
 class NearbyBookingsScreen extends StatefulWidget {
   final String token;
+  final Map<String, dynamic> userData;
   final bool isTab;
   final Function(int)? onTabSwitch;
 
   const NearbyBookingsScreen({
     super.key,
     required this.token,
+    required this.userData,
     this.isTab = false,
     this.onTabSwitch,
   });
@@ -26,6 +29,7 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
   List<dynamic> _bookings = [];
   bool _isLoading = true;
   StreamSubscription? _claimingSubscription;
+  StreamSubscription? _newBookingSubscription;
 
   @override
   void initState() {
@@ -35,9 +39,10 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
   }
 
   void _initListeners() {
+    // 1. Listen for bookings claimed by others (or cancelled)
     _claimingSubscription = _apiService.listenForBookingClaimed((data) {
       if (!mounted) return;
-      debugPrint('[NearbyBookings] Real-time claim event: $data');
+      debugPrint('[NearbyBookings] Real-time claim/cancel event: $data');
       final bookingId = data['booking_id'];
       if (bookingId != null) {
         setState(() {
@@ -47,11 +52,43 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
         });
       }
     });
+
+    // 2. Listen for NEW bookings (Nearby/Broadcast or Direct)
+    final providerId =
+        widget.userData['provider']?['id'] ??
+        widget.userData['user']?['id']; // Fallback
+
+    if (providerId != null) {
+      debugPrint(
+        '[NearbyBookings] Listening for new bookings on therapist.$providerId',
+      );
+      _newBookingSubscription = _apiService.listenForBookings(
+        int.parse(providerId.toString()),
+        (booking) {
+          if (!mounted) return;
+          debugPrint(
+            '[NearbyBookings] Real-time new booking: ${booking['id']}',
+          );
+
+          setState(() {
+            // Check if already in list to avoid duplicates
+            final exists = _bookings.any(
+              (b) => b['id'].toString() == booking['id'].toString(),
+            );
+            if (!exists) {
+              // Add to top of list
+              _bookings.insert(0, booking);
+            }
+          });
+        },
+      );
+    }
   }
 
   @override
   void dispose() {
     _claimingSubscription?.cancel();
+    _newBookingSubscription?.cancel();
     super.dispose();
   }
 
@@ -59,13 +96,41 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final response = await _apiService.getNearbyBookings(
+      // 1. Fetch Nearby (Broadcast) Bookings
+      final nearbyResponse = await _apiService.getNearbyBookings(
         token: widget.token,
         bookingType: 'home_service',
       );
+
+      List<dynamic> combinedBookings = List.from(
+        nearbyResponse['bookings'] ?? [],
+      );
+
+      // 2. If it's a Classic tier (or we want unified list), also fetch Direct requests
+      final tier = widget.userData['user']?['customer_tier'] ?? 'classic';
+      if (tier == 'classic') {
+        try {
+          final directResponse = await _apiService.activeRequests(
+            token: widget.token,
+          );
+          final directBookings = directResponse['bookings'] ?? [];
+
+          for (var db in directBookings) {
+            final exists = combinedBookings.any(
+              (b) => b['id'].toString() == db['id'].toString(),
+            );
+            if (!exists) {
+              combinedBookings.add(db);
+            }
+          }
+        } catch (de) {
+          debugPrint('[NearbyBookings] Failed to fetch direct requests: $de');
+        }
+      }
+
       if (!mounted) return;
       setState(() {
-        _bookings = response['bookings'];
+        _bookings = combinedBookings;
         _isLoading = false;
       });
     } catch (e) {
@@ -273,30 +338,60 @@ class _NearbyBookingsScreenState extends State<NearbyBookingsScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFB8860B), goldColor],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ElevatedButton(
-                          onPressed: () => _acceptBooking(booking['id']),
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 48),
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) =>
+                                      BookingDetailsModal(booking: booking),
+                                );
+                              },
+                              style: TextButton.styleFrom(
+                                foregroundColor: goldColor,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              child: const Text(
+                                'View Details',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ),
-                          child: const Text(
-                            'Accept Job',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFB8860B), goldColor],
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: ElevatedButton(
+                                onPressed: () => _acceptBooking(booking['id']),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.transparent,
+                                  shadowColor: Colors.transparent,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Accept Job',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ],
                   ),

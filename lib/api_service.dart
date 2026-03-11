@@ -802,6 +802,11 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> activeRequests({
+    required String token,
+    String? bookingType,
+  }) => getActiveRequests(token: token, bookingType: bookingType);
+
   Future<Map<String, dynamic>> getActiveRequests({
     required String token,
     String? bookingType,

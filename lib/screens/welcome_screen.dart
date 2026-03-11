@@ -195,7 +195,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     );
                   }
                 }
-                _checkActiveRequests(suppressNotification: true);
+                _refreshRequestCounts();
                 return;
               }
 
@@ -217,7 +217,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     booking['provider_id'] != null;
               }
 
-              _checkActiveRequests(suppressNotification: true);
+              _refreshRequestCounts();
               _showBookingNotification(booking, isDirect: dynamicIsDirect);
             });
 
@@ -312,11 +312,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               }
 
               // Refresh counts immediately to remove the claimed booking
-              _checkActiveRequests();
-              _checkNearbyBookings();
-              if (widget.userData['user']?['customer_tier'] == 'store') {
-                _checkStoreRequests();
-              }
+              _refreshRequestCounts();
             });
 
             debugPrint(
@@ -709,6 +705,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       }
     } catch (e) {
       print('Error fetching stats: $e');
+    }
+  }
+
+  void _refreshRequestCounts() {
+    _checkActiveRequests(suppressNotification: true);
+    _checkNearbyBookings();
+    if (widget.userData['user']?['customer_tier'] == 'store') {
+      _checkStoreRequests();
     }
   }
 

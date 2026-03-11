@@ -14,6 +14,7 @@ import 'dart:async';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:app_links/app_links.dart';
+import '../chat_provider.dart';
 import 'job_progress_screen.dart';
 import 'booking_history_screen.dart';
 import 'account_screen.dart';
@@ -313,6 +314,24 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
               // Refresh counts immediately to remove the claimed booking
               _refreshRequestCounts();
+            });
+
+            // Listen for Messages on the active booking if it exists
+            _checkOngoingJob().then((_) {
+              if (_ongoingBooking != null) {
+                final ongoingId = _ongoingBooking!['id'];
+                debugPrint(
+                  '[WelcomeScreen] 💬 Subscribing to messages for ongoing booking $ongoingId',
+                );
+                _apiService.listenForBookingMessages(ongoingId, (messageData) {
+                  if (mounted) {
+                    Provider.of<ChatProvider>(
+                      context,
+                      listen: false,
+                    ).addMessage(messageData, bookingId: ongoingId);
+                  }
+                });
+              }
             });
 
             debugPrint(
@@ -1785,9 +1804,91 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               activeIcon: Icon(Icons.people_rounded),
               label: 'Staff',
             ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.history_outlined),
-            activeIcon: Icon(Icons.history),
+          BottomNavigationBarItem(
+            icon: Consumer<ChatProvider>(
+              builder: (context, chat, child) {
+                final unread = chat.totalUnreadCount;
+                return Stack(
+                  children: [
+                    const Icon(Icons.history_outlined),
+                    if (unread > 0)
+                      Positioned(
+                        right: -2,
+                        top: -2,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFF1E1E1E),
+                              width: 1.5,
+                            ),
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          child: Text(
+                            '$unread',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+            activeIcon: Consumer<ChatProvider>(
+              builder: (context, chat, child) {
+                final unread = chat.totalUnreadCount;
+                return Stack(
+                  children: [
+                    const Icon(Icons.history),
+                    if (unread > 0)
+                      Positioned(
+                        right: -2,
+                        top: -2,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFF1E1E1E),
+                              width: 1.5,
+                            ),
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          child: Text(
+                            '$unread',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
             label: "Sessions",
           ),
           const BottomNavigationBarItem(

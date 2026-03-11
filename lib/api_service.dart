@@ -177,8 +177,12 @@ class _PusherManager {
     final controller = StreamController<Map<String, dynamic>>.broadcast();
     void tryBind() {
       if (_channels.containsKey(fullName)) {
+        debugPrint('[Pusher] 🔗 Binding event "$eventName" to "$fullName"');
         _channels[fullName]!.bind(eventName).listen((event) {
           final raw = event.data;
+          debugPrint(
+            '[Pusher] 🚀 Event received! channel=$fullName event=$eventName data=$raw',
+          );
           if (raw is Map<String, dynamic>) {
             controller.add(raw);
           } else if (raw != null) {
@@ -192,6 +196,9 @@ class _PusherManager {
           }
         });
       } else {
+        debugPrint(
+          '[Pusher] ⏳ Waiting for channel "$fullName" to bind "$eventName"...',
+        );
         Future.delayed(const Duration(milliseconds: 200), tryBind);
       }
     }

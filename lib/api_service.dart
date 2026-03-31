@@ -9,6 +9,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 /// Manages Pusher connections directly via dart_pusher_channels.
 /// No laravel_echo wrapper — events are pure Dart streams.
 class _PusherManager {
+  static const String _apiHost = '167.172.89.188';
+  static const int _apiPort = 8080;
+
   PusherChannelsClient? _client;
   final Map<String, Channel> _channels = {};
   // Subscriptions queued before the connection is established
@@ -25,10 +28,10 @@ class _PusherManager {
     _authUrl = authUrl;
 
     final options = PusherChannelsOptions.fromHost(
-      scheme: 'wss',
-      host: 'api.spacall.ph',
+      scheme: 'ws',
+      host: _apiHost,
       key: 'spacallkey',
-      port: 443,
+      port: _apiPort,
     );
 
     debugPrint('[Pusher] WebSocket URI: ${options.uri}');
@@ -68,7 +71,7 @@ class _PusherManager {
     });
 
     _client!.connect();
-    debugPrint('[Pusher] 🔄 Connecting to api.spacall.ph...');
+    debugPrint('[Pusher] 🔄 Connecting to $_apiHost:$_apiPort...');
 
     await connectionCompleter.future.timeout(
       const Duration(seconds: 10),
@@ -222,8 +225,10 @@ class _PusherManager {
 }
 
 class ApiService {
+  static const String _apiDomain = 'http://167.172.89.188:8080';
+
   static String get baseUrl {
-    return 'https://api.spacall.ph/api';
+    return '$_apiDomain/api';
   }
 
   static String? normalizePhotoUrl(String? url) {
@@ -232,11 +237,14 @@ class ApiService {
     if (url.startsWith('http')) {
       if (url.contains('localhost') ||
           url.contains('127.0.0.1') ||
-          url.contains('10.0.2.2')) {
+          url.contains('10.0.2.2') ||
+          url.contains('api.spacall.ph')) {
         return url
-            .replaceAll('http://localhost', 'https://api.spacall.ph')
-            .replaceAll('http://127.0.0.1', 'https://api.spacall.ph')
-            .replaceAll('http://10.0.2.2', 'https://api.spacall.ph');
+            .replaceAll('http://localhost', _apiDomain)
+            .replaceAll('http://127.0.0.1', _apiDomain)
+            .replaceAll('http://10.0.2.2', _apiDomain)
+            .replaceAll('https://api.spacall.ph', _apiDomain)
+            .replaceAll('http://api.spacall.ph', _apiDomain);
       }
       return url;
     }
@@ -246,7 +254,7 @@ class ApiService {
       path = '/storage$path';
     }
 
-    return 'https://api.spacall.ph$path';
+    return '$_apiDomain$path';
   }
 
   static final _PusherManager _pusher = _PusherManager();
@@ -806,6 +814,128 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Dashboard Stats Error: $e');
+    }
+  }
+
+  Future<List<dynamic>> getServiceCatalog() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/services'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['categories'] ?? [];
+      }
+      throw Exception('Failed to fetch services catalog');
+    } catch (e) {
+      throw Exception('Service Catalog Error: $e');
+    }
+  }
+
+  Future<List<dynamic>> getTherapistServices(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/therapist/services'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['services'] ?? [];
+      }
+      throw Exception('Failed to fetch provider services: ${response.body}');
+    } catch (e) {
+      throw Exception('Provider Services Error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> saveTherapistServices(
+    String token,
+    List<Map<String, dynamic>> services,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/therapist/services'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'services': services}),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      throw Exception('Failed to save provider services: ${response.body}');
+    } catch (e) {
+      throw Exception('Save Services Error: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> createCustomService(
+    String token, {
+    required String name,
+    String? description,
+    int? categoryId,
+    required int durationMinutes,
+    required double price,
+    double? vipPrice,
+    String? thumbnailUrl,
+    dynamic photo,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/therapist/services/custom'),
+      );
+      request.headers['Accept'] = 'application/json';
+      request.headers['Authorization'] = 'Bearer $token';
+
+      request.fields['name'] = name;
+      if (description != null && description.isNotEmpty) {
+        request.fields['description'] = description;
+      }
+      if (categoryId != null) {
+        request.fields['category_id'] = categoryId.toString();
+      }
+      request.fields['duration_minutes'] = durationMinutes.toString();
+      request.fields['price'] = price.toString();
+      if (vipPrice != null) {
+        request.fields['vip_price'] = vipPrice.toString();
+      }
+      if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) {
+        request.fields['thumbnail_url'] = thumbnailUrl;
+      }
+
+      if (photo != null) {
+        if (photo is XFile) {
+          request.files.add(
+            await http.MultipartFile.fromPath('photo', photo.path),
+          );
+        } else if (photo is String) {
+          request.files.add(await http.MultipartFile.fromPath('photo', photo));
+        }
+      }
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body);
+      }
+      throw Exception('Failed to create custom service: ${response.body}');
+    } catch (e) {
+      throw Exception('Create Custom Service Error: $e');
     }
   }
 

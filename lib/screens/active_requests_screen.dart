@@ -82,10 +82,7 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final response = await _apiService.getActiveRequests(
-        token: widget.token,
-        bookingType: 'home_service',
-      );
+      final response = await _apiService.getActiveRequests(token: widget.token);
       if (!mounted) return;
       setState(() {
         _requests = response['bookings'];
@@ -191,7 +188,7 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'No new direct requests',
+                  'No pending requests',
                   style: TextStyle(color: Colors.grey),
                 ),
               ],
@@ -241,8 +238,10 @@ class _ActiveRequestsScreenState extends State<ActiveRequestsScreen> {
                               color: const Color(0xFFD4AF37).withOpacity(0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Text(
-                              'VIP DIRECT',
+                            child: Text(
+                              (booking['booking_type'] == 'in_store')
+                                  ? 'STORE APPOINTMENT'
+                                  : 'VIP DIRECT',
                               style: TextStyle(
                                 color: Color(0xFFD4AF37),
                                 fontSize: 10,

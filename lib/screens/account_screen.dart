@@ -11,6 +11,7 @@ import 'support_chat_screen.dart';
 import 'edit_profile_screen.dart';
 import 'vip_upgrade_screen.dart';
 import 'store_profile_screen.dart';
+import 'manage_services_screen.dart';
 import '../widgets/luxury_error_modal.dart';
 import '../widgets/luxury_success_modal.dart';
 
@@ -769,6 +770,22 @@ class _AccountScreenState extends State<AccountScreen> {
 
               // Settings Sections
               _buildSection("Account", [
+                _buildSettingItem(
+                  Icons.design_services_outlined,
+                  "My Services",
+                  "Manage services, prices, and availability",
+                  themeProvider,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            ManageServicesScreen(userData: widget.userData),
+                      ),
+                    );
+                    if (mounted) setState(() {});
+                  },
+                ),
                 _buildSettingItem(
                   Icons.person,
                   "Edit Profile",

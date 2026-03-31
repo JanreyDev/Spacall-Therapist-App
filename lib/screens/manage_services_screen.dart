@@ -161,7 +161,6 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
       MaterialPageRoute(
         builder: (context) => _AddCustomServiceScreen(
           token: widget.userData['token'].toString(),
-          categories: _categories,
           apiService: _apiService,
         ),
       ),
@@ -456,12 +455,10 @@ class _ManageServicesScreenState extends State<ManageServicesScreen> {
 
 class _AddCustomServiceScreen extends StatefulWidget {
   final String token;
-  final List<_CategoryOption> categories;
   final ApiService apiService;
 
   const _AddCustomServiceScreen({
     required this.token,
-    required this.categories,
     required this.apiService,
   });
 
@@ -479,13 +476,11 @@ class _AddCustomServiceScreenState extends State<_AddCustomServiceScreen> {
   final ImagePicker _picker = ImagePicker();
 
   bool _isSubmitting = false;
-  int? _categoryId;
   XFile? _thumbnailFile;
 
   @override
   void initState() {
     super.initState();
-    _categoryId = widget.categories.isNotEmpty ? widget.categories.first.id : null;
   }
 
   @override
@@ -559,7 +554,6 @@ class _AddCustomServiceScreenState extends State<_AddCustomServiceScreen> {
         widget.token,
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
-        categoryId: _categoryId,
         durationMinutes: duration,
         price: normalPrice,
         vipPrice: vipPrice,
@@ -674,22 +668,6 @@ class _AddCustomServiceScreenState extends State<_AddCustomServiceScreen> {
                   decoration: _inputDecoration("Description", hint: "Describe this service..."),
                 ),
                 const SizedBox(height: 12),
-                if (widget.categories.isNotEmpty)
-                  DropdownButtonFormField<int>(
-                    value: _categoryId,
-                    dropdownColor: const Color(0xFF1A1A1A),
-                    decoration: _inputDecoration("Category"),
-                    items: widget.categories
-                        .map(
-                          (c) => DropdownMenuItem<int>(
-                            value: c.id,
-                            child: Text(c.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => _categoryId = value),
-                  ),
-                if (widget.categories.isNotEmpty) const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(

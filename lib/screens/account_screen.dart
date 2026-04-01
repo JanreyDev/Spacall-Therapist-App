@@ -395,13 +395,18 @@ class _AccountScreenState extends State<AccountScreen> {
         .toLowerCase();
     final currentTier = provider['current_tier'];
     final int currentLevel = currentTier?['level'] ?? 0;
+    final tierMembershipLabel = tier == 'vip'
+        ? 'VIP Membership'
+        : tier == 'classic'
+        ? 'Classic Membership'
+        : tier == 'store'
+        ? 'Store Membership'
+        : '${tier.replaceAll('_', ' ').toUpperCase()} Membership';
 
     final isActuallyPending = _isUpgradePending || vipStatus == 'pending';
-    // isVipStatus: true if tier is vip or approved manually (unless explicitly classic)
     final isVipStatus =
         tier == 'vip' || (vipStatus == 'approved' && tier != 'classic');
-    // isVip: true if status is VIP OR they have progressed in levels (PRO/EXPERT etc)
-    final isVip = isVipStatus || currentLevel > 0;
+    final isVip = isVipStatus;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -567,7 +572,7 @@ class _AccountScreenState extends State<AccountScreen> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            isVip ? "VIP Membership" : "Classic Membership",
+                            tierMembershipLabel,
                             style: TextStyle(
                               color: isVip ? Colors.black : goldColor,
                               fontWeight: FontWeight.w900,

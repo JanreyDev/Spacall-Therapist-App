@@ -2087,21 +2087,23 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                 (therapistProfile['vip_status'] ?? '')
                                     .toString()
                                     .toLowerCase();
-                            final currentTier = provider['current_tier'];
-                            final int currentLevel = currentTier?['level'] ?? 0;
                             final tier =
                                 (user!['customer_tier'] ??
                                         user!['therapist_tier'] ??
                                         'standard')
                                     .toString()
                                     .toLowerCase();
+                            final badgeLabel = tier == 'vip'
+                                ? 'VIP'
+                                : tier == 'store'
+                                ? 'STORE'
+                                : tier == 'classic'
+                                ? 'CLASSIC'
+                                : tier.toUpperCase();
 
-                            // Consistent logic: VIP if tier is vip, or approved (unless explicitly classic), or level > 0
                             final isVip =
                                 tier == 'vip' ||
-                                (vipStatus == 'approved' &&
-                                    tier != 'classic') ||
-                                currentLevel > 0;
+                                (vipStatus == 'approved' && tier != 'classic');
 
                             return Container(
                               padding: const EdgeInsets.symmetric(
@@ -2139,7 +2141,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    isVip ? "VIP" : "CLASSIC",
+                                    badgeLabel,
                                     style: TextStyle(
                                       color: isVip ? Colors.black : goldColor,
                                       fontSize: 8,
